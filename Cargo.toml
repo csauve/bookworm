@@ -1,0 +1,9 @@
+[package]
+name = "slughorn"
+version = "0.1.0"
+authors = ["csauve <csauve@t3hz0r.com>"]
+edition = "2018"
+
+[dependencies]
+actix-web = "1.0"
+serde = { version = "1.0", features = ["derive"] }
