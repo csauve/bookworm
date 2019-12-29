@@ -1,5 +1,8 @@
 use serde::{Serialize, Deserialize};
 
+pub type GameId = String;
+pub type SnakeId = String;
+
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SnakeConfig {
@@ -10,10 +13,10 @@ pub struct SnakeConfig {
 
 #[derive(Deserialize)]
 pub struct Game {
-    pub id: String,
+    pub id: GameId,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Coords {
     pub x: u32,
     pub y: u32,
@@ -27,9 +30,9 @@ pub struct Board {
     pub snakes: Vec<Snake>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 pub struct Snake {
-    pub id: String,
+    pub id: SnakeId,
     pub name: String,
     pub health: u32,
     pub body: Vec<Coords>,
