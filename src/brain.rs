@@ -1,7 +1,7 @@
-use crate::game::{Match};
-use crate::api::{Direction};
+use crate::game::Game;
+use crate::api::ApiDirection;
 
-pub fn get_decision(_mat: &Match) -> Direction {
+pub fn get_decision(game: &Game) -> ApiDirection {
     //todo
-    Direction::Right
+    ApiDirection::Right
 }
