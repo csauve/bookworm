@@ -14,7 +14,6 @@ pub struct Path {
 
 impl Path {
 
-    //todo: this is wrong... work on it
     pub fn new(arg_nodes: &[Coord]) -> Option<Path> {
         if arg_nodes.is_empty() {
             Option::None
