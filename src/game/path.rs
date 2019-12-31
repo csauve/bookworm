@@ -2,8 +2,11 @@ use super::coord::Coord;
 use super::offset;
 use crate::api::ApiCoords;
 
-// A path connects a series of coordinates with direction. Nodes are only
-// kept where the path begins, ends, and changes direction.
+// A path connects a series of coordinates with direction. If nodes are only
+// kept where the path begins, ends, and changes direction, then this path represents
+// an exact path between the start and end. If any consecutive pair of nodes has a non-linear
+// offset, the path between them is an undefined shortest manhattan path. All paths have at least
+// one node, in which case its length is 0 but it can still intersect.
 #[derive(PartialEq)]
 pub struct Path {
     //todo: do nodes need to be public?
@@ -13,31 +16,35 @@ pub struct Path {
 impl Path {
 
     //todo: should we allow 0-length paths?
-    //todo: is this backwards for snakes?
-    pub fn init(coords: &Vec<ApiCoords>) -> Path {
+    pub fn new(arg_nodes: &[Coord]) -> Option<Path> {
+        if arg_nodes.is_empty() {
+            return Option::None;
+        }
+
         let mut nodes: Vec<Coord> = Vec::new();
         let mut prev_offset = offset::ZERO;
 
-        //todo: convert ApiCoords to Path
-        for coord in coords.iter() {
-            let next = Coord {
-                //todo: handle overflows?
-                x: coord.x as u8,
-                y: coord.y as u8,
-            };
+        //todo: this is wrong... work on it
+        for next in arg_nodes.iter() {
             if let Some(prev) = nodes.last() {
-                //todo: use and update prev_offset instead
-                if next == *prev {
-                    //stacked ApiCoords can be skipped
-                    continue;
+                let next_offset = *next - *prev;
+                if next_offset != prev_offset && *next != *prev {
+                    nodes.push(*next);
                 }
+                prev_offset = next_offset;
             } else {
                 //it's the first node, so add it regardless
-                nodes.push(next);
+                nodes.push(*next);
             }
         }
 
-        Path {nodes}
+        Option::from(Path {nodes})
+    }
+
+    //todo: convert to slice argument
+    pub fn init(coords: &Vec<ApiCoords>) -> Option<Path> {
+        let mapped_coords: Vec<_> = coords.iter().map(|c| Coord::init(*c)).collect();
+        Path::new(&mapped_coords)
     }
 
     //todo: this isn't correct, work on it and add tests
@@ -47,7 +54,7 @@ impl Path {
         })
     }
 
-    //todo: would does this work without Coord implementing Copy/Clone?
+    //todo: would this work without Coord implementing Copy/Clone?
     pub fn start(&self) -> Coord {
         *self.nodes.first().unwrap()
     }
@@ -57,10 +64,24 @@ impl Path {
     }
 
     pub fn intersects(&self, coord: Coord) -> bool {
-        self.start() == coord || self.nodes.windows(2).any(|pair| {
+        //check the start and end first since they're likely to be common intersection points
+        self.start() == coord || self.end() == coord || self.nodes.windows(2).any(|pair| {
             coord.bounded_by(pair[0], pair[1])
         })
     }
 }
 
-//todo: tests for Path
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new() {
+        let path = Path::new(&[Coord::new(0, 0)]);
+    }
+
+    #[test]
+    fn test_init() {
+    }
+
+}

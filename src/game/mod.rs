@@ -4,7 +4,9 @@ mod path;
 mod snake;
 
 //todo: is there some stuff we don't need to re-export?
-use crate::api::ApiGameState;
+use std::collections::HashMap;
+use std::cmp::Ordering::*;
+use crate::api::{ApiSnakeId, ApiGameState};
 pub use coord::*;
 pub use offset::*;
 pub use path::*;
@@ -20,30 +22,31 @@ pub struct Turn {
     pub food: Vec<Coord>,
 }
 
-type NextTurns = Option<Vec<FutureTurn>>;
+impl Turn {
+    pub fn init(snake_indexes: &HashMap<ApiSnakeId, u8>, game_state: &ApiGameState) -> Turn {
+        Turn {
+            index: game_state.turn as usize,
+            you: Snake::init(snake_indexes[&game_state.you.id], &game_state.you)
+                .expect("API game state contained invalid `you` snake. Wat do!?"),
+            enemies: game_state.board.snakes.iter().filter_map(|api_snake| {
+                Snake::init(snake_indexes[&api_snake.id], api_snake)
+            }).collect(),
+            food: game_state.board.food.iter().map(|c| Coord::init(*c)).collect(),
+        }
+    }
+}
 
-pub struct FutureTurn {
-    pub turn: Turn,
-    pub next: NextTurns,
+//persistent info about snakes that doesn't vary turn-to-turn
+struct SnakeData {
+    pub name: String,
+    pub api_id: ApiSnakeId,
 }
 
 pub struct Game {
     pub width: u32,
     pub height: u32,
     pub history: Vec<Option<Turn>>, //option in case we miss some calls
-    pub future: NextTurns,
-}
-
-impl Turn {
-    pub fn init(game_state: &ApiGameState) -> Turn {
-        //todo
-        Turn {
-            index: game_state.turn as usize,
-            you: Snake::init(you_id, &game_state.you),
-            enemies: game_state.board.snakes.clone(),
-            food: game_state.board.food.clone(),
-        }
-    }
+    snake_data: Vec<SnakeData>,
 }
 
 impl Game {
@@ -52,23 +55,42 @@ impl Game {
             width: game_state.board.width,
             height: game_state.board.height,
             history: Vec::new(),
-            future: Option::None,
+            snake_data: game_state.board.snakes.iter().map(|api_snake| {
+                SnakeData {
+                    name: api_snake.name.clone(),
+                    api_id: api_snake.id.clone(),
+                }
+            }).collect(),
         };
         game.update(game_state);
         game
     }
 
-    //todo
     pub fn update(&mut self, game_state: &ApiGameState) {
-        let new_turn = Turn::init(game_state);
-        if self.history.len() == new_turn.index {
-            self.history.push(Option::from(new_turn));
-        } else if self.history.len() < new_turn.index {
-            //history buffer isn't long enough to hold this turn
-            // self.history.extend_with(n: usize, mut value: E)
-        } else {
-            //the new turn occurs somewhere in history
-            self.history[new_turn.index] = Option::from(new_turn);
+        let snake_indexes = game_state.board.snakes.iter().map(|api_snake| {
+            let index = self.snake_data.iter().position(|snake_data| {
+                snake_data.api_id == api_snake.id
+            }).expect("Unexpected snake ID");
+            (api_snake.id.clone(), index as u8)
+        }).collect::<HashMap<_, _>>();
+        let new_turn = Turn::init(&snake_indexes, game_state);
+
+        match self.history.len().cmp(&new_turn.index) {
+            Equal => {
+                self.history.push(Option::from(new_turn));
+            },
+            Less => {
+                //history buffer isn't long enough to hold this turn
+                let turn_index = new_turn.index;
+                let new_len = turn_index + 1;
+                self.history.resize_with(new_len, || Option::None);
+                self.history[turn_index] = Option::from(new_turn);
+            },
+            Greater => {
+                //the new turn occurs somewhere in history
+                let turn_index = new_turn.index;
+                self.history[turn_index] = Option::from(new_turn);
+            }
         }
     }
 }
