@@ -5,17 +5,17 @@ use std::cmp::min;
 
 //todo: using Path here means we don't know true length (e.g. stacked ApiCoords). Problem?
 pub struct Snake {
-    pub index: u8,
+    pub id: u8,
     pub health: u8,
     pub body: Path,
 }
 
 impl Snake {
 
-    pub fn init(index: u8, api_snake: &ApiSnake) -> Option<Snake> {
+    pub fn init(id: u8, api_snake: &ApiSnake) -> Option<Snake> {
         if let Some(body) = Path::init(&api_snake.body) {
             Option::from(Snake {
-                index,
+                id,
                 //cap at 256 instead of wrapping if health from API was higher
                 health: min(api_snake.health, std::u8::MAX as u32) as u8,
                 body,
