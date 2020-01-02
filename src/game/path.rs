@@ -65,41 +65,49 @@ impl Path {
     }
 }
 
+#[macro_export]
+macro_rules! path {
+    ($(($x:expr, $y:expr)),*) => (Path::new(&[$(Coord::new($x, $y)),*]));
+    ($($coord:expr),*) => (Path::new(&[$($coord),*]));
+    ($(($x:expr, $y:expr),)*) => (path![$(($x, $y)),*]);
+    ($($coord:expr,)*) => (path![$($coord),*]);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_new() {
-        assert_eq!(Path::new(&[]), Option::None);
+        assert_eq!(path![], Option::None);
 
-        let mut path = Path::new(&[
-            Coord::new(1, 0),
-        ]).unwrap();
+        let mut path = path![
+            (1, 0),
+        ].unwrap();
 
         assert_eq!(path.nodes, &[
             Coord::new(1, 0),
         ]);
 
-        path = Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-        ]).unwrap();
+        path = path![
+            (0, 0),
+            (1, 0),
+        ].unwrap();
 
         assert_eq!(path.nodes, &[
             Coord::new(0, 0),
             Coord::new(1, 0),
         ]);
 
-        path = Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            Coord::new(2, 0),
-            Coord::new(2, 1),
-            Coord::new(2, 2),
-            Coord::new(3, 2),
-            Coord::new(3, 2),
-        ]).unwrap();
+        path = path![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+            (3, 2),
+            (3, 2),
+        ].unwrap();
 
         assert_eq!(path.nodes, &[
             Coord::new(0, 0),
@@ -111,19 +119,19 @@ mod tests {
 
     #[test]
     fn test_start_end() {
-        let mut path = Path::new(&[
-            Coord::new(0, 0),
-        ]).unwrap();
+        let mut path = path![
+            (0, 0),
+        ].unwrap();
 
         assert_eq!(path.start(), Coord::new(0, 0));
         assert_eq!(path.end(), Coord::new(0, 0));
 
-        path = Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(4, 0),
-            Coord::new(4, 10),
-            Coord::new(4, 10),
-        ]).unwrap();
+        path = path![
+            (0, 0),
+            (4, 0),
+            (4, 10),
+            (4, 10),
+        ].unwrap();
 
         assert_eq!(path.start(), Coord::new(0, 0));
         assert_eq!(path.end(), Coord::new(4, 10));
@@ -131,59 +139,59 @@ mod tests {
 
     #[test]
     fn test_length() {
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-        ]).unwrap().length(), 0);
+        assert_eq!(path![
+            (0, 0),
+        ].unwrap().length(), 0);
 
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-        ]).unwrap().length(), 1);
+        assert_eq!(path![
+            (0, 0),
+            (1, 0),
+        ].unwrap().length(), 1);
 
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(2, 0),
-        ]).unwrap().length(), 2);
+        assert_eq!(path![
+            (0, 0),
+            (2, 0),
+        ].unwrap().length(), 2);
 
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 1),
-        ]).unwrap().length(), 2);
+        assert_eq!(path![
+            (0, 0),
+            (1, 1),
+        ].unwrap().length(), 2);
 
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            Coord::new(2, 0),
-            Coord::new(2, 1),
-            Coord::new(2, 2),
-            Coord::new(3, 2),
-            Coord::new(3, 2),
-        ]).unwrap().length(), 5);
+        assert_eq!(path![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (2, 1),
+            (2, 2),
+            (3, 2),
+            (3, 2),
+        ].unwrap().length(), 5);
 
-        assert_eq!(Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(1, 0),
-            Coord::new(1, 1),
-            Coord::new(10, 10),
-            Coord::new(15, 12),
-        ]).unwrap().length(), 27);
+        assert_eq!(path![
+            (0, 0),
+            (1, 0),
+            (1, 1),
+            (10, 10),
+            (15, 12),
+        ].unwrap().length(), 27);
     }
 
     #[test]
     fn test_intersects() {
-        let mut path = Path::new(&[
-            Coord::new(0, 0),
-        ]).unwrap();
+        let mut path = path![
+            (0, 0),
+        ].unwrap();
 
         assert!(path.intersects(Coord::new(0, 0)));
         assert!(!path.intersects(Coord::new(1, 0)));
 
-        path = Path::new(&[
-            Coord::new(0, 0),
-            Coord::new(10, 0),
-            Coord::new(10, 10),
-            Coord::new(20, 20),
-        ]).unwrap();
+        path = path![
+            (0, 0),
+            (10, 0),
+            (10, 10),
+            (20, 20),
+        ].unwrap();
 
         assert!(path.intersects(Coord::new(5, 0)));
         assert!(!path.intersects(Coord::new(5, 1)));
