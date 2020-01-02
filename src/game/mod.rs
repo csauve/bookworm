@@ -61,6 +61,7 @@ impl Game {
 
     pub fn update(&mut self, game_state: &ApiGameState) {
 
+        //todo: include the `you` snake and self-initialize the `snake_data`
         let snake_indexes = game_state.board.snakes.iter().map(|api_snake| {
             let index = self.snake_data.iter().position(|snake_data| {
                 snake_data.api_id == api_snake.id
@@ -96,11 +97,11 @@ mod tests {
     #[test]
     fn test_init() {
         let api_game = ApiGameState::parse_basic("\
-        |  |()|  |\
-        |  |  |Y0|\
-        |A0|A1|Y1|\
-        |  |A2|  |\
-        |  |  |  |\
+        |  |()|  |
+        |  |  |Y0|
+        |A0|A1|Y1|
+        |  |A2|  |
+        |  |  |  |
         ");
 
         let game = Game::init(&api_game);

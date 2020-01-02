@@ -87,6 +87,9 @@ pub mod tests {
                             food.push(coord);
                         },
                         content => {
+                            if content.is_empty() {
+                                continue;
+                            }
                             let chars: Vec<char> = content.chars().collect();
                             let snake_name = chars[0].to_string();
                             let index = chars[1].to_digit(10).unwrap() as usize;

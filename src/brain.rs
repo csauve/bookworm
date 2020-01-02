@@ -1,7 +1,7 @@
 use crate::game::Game;
 use crate::api::ApiDirection;
 
-pub fn get_decision(game: &Game) -> ApiDirection {
+pub fn get_decision(_game: &Game) -> ApiDirection {
     //todo
     ApiDirection::Up
 }
@@ -14,9 +14,9 @@ mod tests {
     #[test]
     fn test_at_wall() {
         let result = get_decision(&Game::init(&ApiGameState::parse_basic("
-        |  |  |  |\
-        |Y0|Y1|  |\
-        |  |  |  |\
+        |  |  |  |
+        |Y0|Y1|  |
+        |  |  |  |
         ")));
 
         assert_ne!(result, ApiDirection::Left); //would hit wall
