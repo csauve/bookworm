@@ -5,7 +5,7 @@ mod brain;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use actix_web::{web, get, post, App, HttpServer, Responder};
-use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId};
+use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId, ApiDirection};
 use crate::game::Game;
 use crate::brain::get_decision;
 
@@ -33,19 +33,22 @@ fn handle_start(app_state: web::Data<AppState>, game_state: web::Json<ApiGameSta
 fn handle_move(app_state: web::Data<AppState>, game_state: web::Json<ApiGameState>) -> impl Responder {
     let games = &mut *app_state.games.lock().unwrap();
     let direction = match games.get_mut(&game_state.game.id) {
-        Some(mat) => {
-            mat.update(&game_state);
-            get_decision(mat)
+        Some(game) => {
+            game.update(&game_state);
+            get_decision(game)
         },
         None => {
             //maybe we missed the "/start" call?
-            let mat = Game::init(&game_state);
-            let decision = get_decision(&mat);
-            games.insert(game_state.game.id.clone(), mat);
+            let game = Game::init(&game_state);
+            let decision = get_decision(&game);
+            games.insert(game_state.game.id.clone(), game);
             decision
         }
     };
-    web::Json(ApiMove {move_dir: direction})
+    web::Json(ApiMove {
+        //if we can't find a move, just move right and pray to snake jesusSsSSss
+        move_dir: direction.unwrap_or(ApiDirection::Right)
+    })
 }
 
 #[post("/end")]
