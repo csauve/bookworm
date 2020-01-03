@@ -78,11 +78,11 @@ pub mod tests {
 
             for (y, row) in rows.iter().enumerate() {
                 let cols = row.trim_start_matches('|').split_terminator('|').collect::<Vec<_>>();
-                width = std::cmp::max(height, cols.len());
+                width = std::cmp::max(width, cols.len());
                 for (x, &col) in cols.iter().enumerate() {
                     let coord = ApiCoords {x: x as u32, y: y as u32};
-                    match col {
-                        "  " => {},
+                    match col.trim() {
+                        "" => {},
                         "()" => {
                             food.push(coord);
                         },
@@ -90,9 +90,8 @@ pub mod tests {
                             if content.is_empty() {
                                 continue;
                             }
-                            let chars: Vec<char> = content.chars().collect();
-                            let snake_name = chars[0].to_string();
-                            let index = chars[1].to_digit(10).unwrap() as usize;
+                            let snake_name: String = content.chars().take_while(|&c| c.is_alphabetic()).collect();
+                            let index: usize = content.chars().skip_while(|&c| c.is_alphabetic()).collect::<String>().parse().unwrap();
                             if snake_name == "Y" {
                                 you_coords.resize(index + 1, coord);
                                 you_coords[index] = coord;

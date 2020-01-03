@@ -3,6 +3,7 @@ use super::Offset;
 use std::ops::{Add, Sub};
 use std::cmp::{max, min};
 
+//todo: benchmark u8 vs i16
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Coord {
     pub x: u8,

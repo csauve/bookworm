@@ -22,12 +22,12 @@ pub struct Turn {
 }
 
 impl Turn {
-    fn init(snake_indexes: &HashMap<ApiSnakeId, u8>, game_state: &ApiGameState) -> Turn {
+    fn init(snake_data: &HashMap<ApiSnakeId, SnakeData>, game_state: &ApiGameState) -> Turn {
         Turn {
-            you: Snake::init(snake_indexes[&game_state.you.id], &game_state.you)
+            you: Snake::init(0, &game_state.you)
                 .expect("API game state contained invalid `you` snake. Wat do!?"),
             enemies: game_state.board.snakes.iter().filter_map(|api_snake| {
-                Snake::init(snake_indexes[&api_snake.id], api_snake)
+                Snake::init(snake_data[&api_snake.id].short_id, api_snake)
             }).collect(),
             food: game_state.board.food.iter().map(|c| Coord::init(*c)).collect(),
         }
@@ -37,53 +37,61 @@ impl Turn {
 //persistent info about snakes that doesn't vary turn-to-turn
 struct SnakeData {
     pub name: String,
-    pub api_id: ApiSnakeId,
+    pub short_id: u8,
 }
 
 pub struct Game {
     pub width: u32,
     pub height: u32,
-    pub history: Vec<Option<Turn>>, //option in case we miss some calls
-    snake_data: Vec<SnakeData>,
+    pub turns: Vec<Option<Turn>>, //option in case we miss some calls
+    snake_data: HashMap<ApiSnakeId, SnakeData>,
 }
 
 impl Game {
     pub fn init(game_state: &ApiGameState) -> Game {
+        let mut snake_data = HashMap::new();
+        snake_data.insert(game_state.you.id.clone(), SnakeData {
+            name: game_state.you.name.clone(),
+            short_id: 0,
+        });
+
         let mut game = Game {
             width: game_state.board.width,
             height: game_state.board.height,
-            history: Vec::new(),
-            snake_data: Vec::new(),
+            turns: Vec::new(),
+            snake_data,
         };
+        //populate the remaining snake data and the first turn
         game.update(game_state);
         game
     }
 
     pub fn update(&mut self, game_state: &ApiGameState) {
+        //assign short IDs to snakes if they don't have one already
+        for api_snake in game_state.board.snakes.iter() {
+            if !self.snake_data.contains_key(&api_snake.id) {
+                self.snake_data.insert(api_snake.id.clone(), SnakeData {
+                    name: api_snake.name.clone(),
+                    short_id: self.snake_data.values().map(|d| d.short_id).max().unwrap() + 1
+                });
+            }
+        }
 
-        //todo: include the `you` snake and self-initialize the `snake_data`
-        let snake_indexes = game_state.board.snakes.iter().map(|api_snake| {
-            let index = self.snake_data.iter().position(|snake_data| {
-                snake_data.api_id == api_snake.id
-            }).expect("Unexpected snake ID");
-            (api_snake.id.clone(), index as u8)
-        }).collect::<HashMap<_, _>>();
-
-        let new_turn = Turn::init(&snake_indexes, game_state);
+        let new_turn = Turn::init(&self.snake_data, game_state);
         let new_turn_index = game_state.turn as usize;
 
-        match self.history.len().cmp(&new_turn_index) {
+        match self.turns.len().cmp(&new_turn_index) {
             Equal => {
-                self.history.push(Option::from(new_turn));
+                self.turns.push(Option::from(new_turn));
             },
             Less => {
-                //history buffer isn't long enough to hold this turn
-                self.history.resize_with(new_turn_index + 1, || Option::None);
-                self.history[new_turn_index] = Option::from(new_turn);
+                //turns buffer isn't long enough to hold this turn
+                self.turns.resize_with(new_turn_index + 1, || Option::None);
+                self.turns[new_turn_index] = Option::from(new_turn);
             },
             Greater => {
-                //the new turn occurs somewhere in history
-                self.history[new_turn_index] = Option::from(new_turn);
+                //the new turn occurs somewhere in turns
+                self.turns[new_turn_index] = Option::from(new_turn);
             }
         }
     }
@@ -96,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_init() {
-        let api_game = ApiGameState::parse_basic("\
+        let api_game = ApiGameState::parse_basic("
         |  |()|  |
         |  |  |Y0|
         |A0|A1|Y1|
@@ -108,11 +116,10 @@ mod tests {
 
         assert_eq!(game.height, 5);
         assert_eq!(game.width, 3);
-        assert_eq!(game.history.len(), 3);
-        assert!(game.history[0].is_none());
-        assert!(game.history[1].is_none());
+        assert_eq!(game.turns.len(), 1);
+        assert!(game.turns[0].is_some());
 
-        let turn: &Turn = game.history[2].as_ref().unwrap();
+        let turn: &Turn = game.turns[0].as_ref().unwrap();
         assert_eq!(turn.food, vec![Coord::new(1, 0)]);
         assert_eq!(turn.enemies[0].head(), Coord::new(0, 2));
         assert_eq!(turn.enemies[0].tail(), Coord::new(1, 3));
