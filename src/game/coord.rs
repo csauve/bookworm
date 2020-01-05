@@ -1,36 +1,31 @@
 use crate::api::ApiCoords;
 use super::Offset;
-use std::ops::{Add, Sub};
+use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::cmp::{max, min};
+
+//should change these if board will be bigger
+pub type Unit = i8;
+pub type UnitAbs = u8;
 
 //todo: benchmark u8 vs i16
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Coord {
-    pub x: u8,
-    pub y: u8,
+    pub x: Unit,
+    pub y: Unit,
 }
 
 impl Coord {
 
     #[inline]
-    pub fn new(x: u8, y: u8) -> Coord {
+    pub fn new(x: Unit, y: Unit) -> Coord {
         Coord {x, y}
     }
 
     #[inline]
     pub fn init(api_coords: ApiCoords) -> Coord {
-        //todo: handle overflows?
         Coord {
-            x: api_coords.x as u8,
-            y: api_coords.y as u8,
-        }
-    }
-
-    #[inline]
-    pub fn translate(self, offset: Offset) -> Coord {
-        Coord {
-            x: (self.x as i16 + offset.dx) as u8,
-            y: (self.y as i16 + offset.dy) as u8,
+            x: api_coords.x as Unit,
+            y: api_coords.y as Unit,
         }
     }
 
@@ -49,7 +44,22 @@ impl Add<Offset> for Coord {
 
     #[inline]
     fn add(self, rhs: Offset) -> Coord {
-        self.translate(rhs)
+        Coord {
+            x: self.x + rhs.dx,
+            y: self.x + rhs.dy,
+        }
+    }
+}
+
+impl Sub<Offset> for Coord {
+    type Output = Coord;
+
+    #[inline]
+    fn sub(self, rhs: Offset) -> Coord {
+        Coord {
+            x: self.x - rhs.dx,
+            y: self.x - rhs.dy,
+        }
     }
 }
 
@@ -62,23 +72,35 @@ impl Sub for Coord {
     }
 }
 
-//todo: split up tests
+impl AddAssign<Offset> for Coord {
+    #[inline]
+    fn add_assign(&mut self, rhs: Offset) {
+        self.x += rhs.dx;
+        self.x += rhs.dy;
+    }
+}
+
+impl SubAssign<Offset> for Coord {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Offset) {
+        self.x -= rhs.dx;
+        self.x -= rhs.dy;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_coord_and_offset() {
-        let a = Coord {x: 1, y: 2};
+        let mut a = Coord {x: 1, y: 2};
         let b = Coord {x: 10, y: 0};
+        assert_ne!(a, b);
 
         let ab = Offset::between(a, b);
-        let c = a.translate(ab);
-        assert_eq!(c.x, 10);
-        assert_eq!(c.y, 0);
-
-        assert_eq!(c, b);
-        assert_ne!(a, b);
+        a += ab;
+        assert_eq!(a, b);
     }
 
     #[test]

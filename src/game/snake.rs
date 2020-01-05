@@ -1,23 +1,22 @@
-use crate::api::ApiSnake;
-use super::coord::Coord;
-use super::path::Path;
-use std::cmp::min;
+use crate::api::{ApiSnake, ApiDirection};
+use super::{Offset, Path, Coord};
 
-//todo: using Path here means we don't know true length (e.g. stacked ApiCoords). Problem?
+pub type Health = u8; //make this u16 if there will be health > 256
+pub type ShortId = u8;
+
 pub struct Snake {
-    pub id: u8,
-    pub health: u8,
+    pub id: ShortId,
+    pub health: Health,
     pub body: Path,
 }
 
 impl Snake {
 
-    pub fn init(id: u8, api_snake: &ApiSnake) -> Option<Snake> {
+    pub fn init(id: ShortId, api_snake: &ApiSnake) -> Option<Snake> {
         if let Some(body) = Path::init(&api_snake.body) {
             Option::from(Snake {
                 id,
-                //cap at 256 instead of wrapping if health from API was higher
-                health: min(api_snake.health, std::u8::MAX as u32) as u8,
+                health: api_snake.health as Health,
                 body,
             })
         } else {
@@ -38,7 +37,19 @@ impl Snake {
         self.health == 0
     }
 
-    //todo: mutation fns like move()
+    pub fn slither(&mut self, dir: ApiDirection) {
+        if !self.starved() {
+            self.health -= 1;
+        }
+        let offset = match dir {
+            ApiDirection::Left => Offset::new(-1, 0),
+            ApiDirection::Right => Offset::new(1, 0),
+            ApiDirection::Up => Offset::new(0, -1),
+            ApiDirection::Down => Offset::new(0, 1),
+        };
+        //todo: only allow legal moves
+        self.body.slide_start(offset);
+    }
 }
 
 //todo: write tests

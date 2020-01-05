@@ -6,7 +6,7 @@ mod snake;
 //todo: is there some stuff we don't need to re-export?
 use std::collections::HashMap;
 use std::cmp::Ordering::*;
-use crate::api::{ApiSnakeId, ApiGameState};
+use crate::api::{ApiSnakeId, ApiGameState, ApiDirection};
 pub use coord::*;
 pub use offset::*;
 pub use path::*;
@@ -31,6 +31,11 @@ impl Turn {
             }).collect(),
             food: game_state.board.food.iter().map(|c| Coord::init(*c)).collect(),
         }
+    }
+
+    //https://docs.battlesnake.com/rules
+    pub fn advance(&mut self, moves: HashMap<u8, ApiDirection>, bound: Coord) {
+        //todo
     }
 }
 

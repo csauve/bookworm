@@ -1,5 +1,5 @@
-use std::ops::{Add, Sub};
-use super::Coord;
+use std::ops::{Add, Sub, AddAssign, SubAssign};
+use super::{Coord, Unit, UnitAbs};
 
 pub const ZERO: Offset = Offset {
     dx: 0,
@@ -8,20 +8,22 @@ pub const ZERO: Offset = Offset {
 
 #[derive(Copy, Clone, PartialEq, Debug)]
 pub struct Offset {
-    pub dx: i16,
-    pub dy: i16,
+    pub dx: Unit,
+    pub dy: Unit,
 }
 
 impl Offset {
 
-    pub fn new(dx: i16, dy: i16) -> Offset {
+    #[inline]
+    pub fn new(dx: Unit, dy: Unit) -> Offset {
         Offset {dx, dy}
     }
 
+    #[inline]
     pub fn between(a: Coord, b: Coord) -> Offset {
         Offset {
-            dx: b.x as i16 - a.x as i16,
-            dy: b.y as i16 - a.y as i16,
+            dx: b.x - a.x,
+            dy: b.y - a.y,
         }
     }
 
@@ -31,15 +33,31 @@ impl Offset {
     }
 
     #[inline]
-    pub fn manhattan_dist(self) -> u16 {
-        self.dx.abs() as u16 + self.dy.abs() as u16
+    pub fn manhattan_dist(self) -> UnitAbs {
+        self.dx.abs() as UnitAbs + self.dy.abs() as UnitAbs
     }
 }
 
-//todo: implement AddAssign and SubAssign as well
+impl AddAssign for Offset {
+    #[inline]
+    fn add_assign(&mut self, rhs: Offset) {
+        self.dx += rhs.dx;
+        self.dy += rhs.dy;
+    }
+}
+
+impl SubAssign for Offset {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Offset) {
+        self.dx -= rhs.dx;
+        self.dy -= rhs.dy;
+    }
+}
+
 impl Add for Offset {
     type Output = Offset;
 
+    #[inline]
     fn add(self, rhs: Offset) -> Offset {
         Offset {
             dx: self.dx + rhs.dx,
@@ -59,7 +77,6 @@ impl Sub for Offset {
     }
 }
 
-//todo: write tests
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,6 +89,10 @@ mod tests {
         assert_eq!(a + b, Offset::new(3, 8));
         assert_eq!(a - b, Offset::new(5, -12));
         assert_eq!(Offset::new(0, 0), ZERO);
+
+        let mut c = Offset::new(1, 1);
+        c += Offset::new(2, -1);
+        assert_eq!(c, Offset::new(2, 0))
     }
 
     #[test]

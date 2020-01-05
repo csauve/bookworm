@@ -1,11 +1,14 @@
-use super::coord::Coord;
-use crate::api::ApiCoords;
+use super::{Offset, Coord, UnitAbs};
+use crate::api::{ApiCoords};
 
-// A path connects a series of coordinates with direction. If nodes are only
-// kept where the path begins, ends, and changes direction, then this path represents
-// an exact path between the start and end. If any consecutive pair of nodes has a non-linear
-// offset, the path between them is an undefined shortest manhattan path. All paths have at least
+// A path connects a series of coordinates with direction.
+// Nodes are only retained where the path has a discontinuity
+// (start, end, change in direction). If any consecutive pair of
+// nodes has a non-linear offset, the path between them is an
+// undefined shortest manhattan path. All paths have at least
 // one node, in which case its length is 0 but it can still intersect.
+
+//todo: support stacked/overlapping paths with two distance fns
 #[derive(PartialEq, Debug)]
 pub struct Path {
     //todo: do nodes need to be public?
@@ -14,6 +17,7 @@ pub struct Path {
 
 impl Path {
 
+    //todo: fix this so stacked coords are included
     pub fn new(arg_nodes: &[Coord]) -> Option<Path> {
         if arg_nodes.is_empty() {
             Option::None
@@ -42,10 +46,66 @@ impl Path {
         Path::new(&mapped_coords)
     }
 
-    pub fn length(&self) -> u16 {
+    pub fn slide_start(&mut self, offset: Offset) {
+        self.extend_start(offset);
+        self.trim_end(offset.manhattan_dist());
+    }
+
+    pub fn slide_end(&mut self, offset: Offset) {
+        self.extend_end(offset);
+        self.trim_start(offset.manhattan_dist());
+    }
+
+    //todo: is the O(n) insert gonna be bad for performance when snakes move?
+    pub fn extend_start(&mut self, offset: Offset) {
+        let curr_start = self.nodes.first().unwrap();
+        let new_start = *curr_start + offset;
+        let is_continuous = self.nodes.len() >= 2 &&
+            new_start != *curr_start &&
+            offset.linear() &&
+            curr_start.bounded_by(self.nodes[1], new_start);
+        if is_continuous {
+            *curr_start += offset;
+        } else {
+            self.nodes.insert(0, new_start);
+        }
+    }
+
+    pub fn extend_end(&mut self, offset: Offset) {
+        let curr_end = self.nodes.first().unwrap();
+        let new_end = *curr_end + offset;
+        let is_continuous = self.nodes.len() >= 2 &&
+            new_end != *curr_end &&
+            offset.linear() &&
+            curr_end.bounded_by(self.nodes[self.nodes.len() - 2], new_end);
+        if is_continuous {
+            *curr_end += offset;
+        } else {
+            self.nodes.push(new_end);
+        }
+    }
+
+    //todo
+    pub fn trim_start(&mut self, dist: UnitAbs) {
+        if dist == 1 {
+            //todo: simple case
+        } else if dist > 1 {
+            //todo: complex case?
+        }
+    }
+
+    //todo
+    pub fn trim_end(&mut self, dist: UnitAbs) {
+    }
+
+    pub fn length(&self) -> UnitAbs {
         self.nodes.windows(2).fold(0, |total, pair| {
             total + (pair[1] - pair[0]).manhattan_dist()
         })
+    }
+
+    pub fn num_nodes(&self) -> usize {
+        self.nodes.len()
     }
 
     //todo: would this work without Coord implementing Copy/Clone?
