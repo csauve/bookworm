@@ -2,19 +2,17 @@ use crate::api::{ApiSnake, ApiDirection};
 use super::{Offset, Path, Coord, ZERO};
 
 pub type Health = u8; //make this u16 if there will be health > 256
-pub type ShortId = u8;
 
+#[derive(Clone)]
 pub struct Snake {
-    pub id: ShortId,
     pub health: Health,
     body: Path,
 }
 
 impl Snake {
 
-    pub fn init(id: ShortId, api_snake: &ApiSnake) -> Snake {
+    pub fn init(api_snake: &ApiSnake) -> Snake {
         Snake {
-            id,
             health: api_snake.health as Health,
             body: Path::init(&api_snake.body),
         }

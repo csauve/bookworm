@@ -5,7 +5,6 @@ mod snake;
 
 //todo: is there some stuff we don't need to re-export?
 use std::collections::HashMap;
-use std::cmp::Ordering::*;
 use crate::api::{ApiSnakeId, ApiGameState, ApiDirection};
 pub use coord::*;
 pub use offset::*;
@@ -17,24 +16,29 @@ const SNAKE_MAX_HEALTH: Health = 100;
 //todo: can state be broken up in a way that allows memoization, avoiding cycles?
 //todo: store probabilities and scores in the structure; update when invalidated?
 
+pub struct NextTurn {
+    you_move: ApiDirection,
+    enemy_moves: Vec<ApiDirection>,
+    result: Box<Turn>,
+}
+
 pub struct Turn {
     pub you: Snake,
     pub enemies: Vec<Snake>,
     pub food: Vec<Coord>,
+    pub next: Option<Vec<NextTurn>>
 }
 
 impl Turn {
-    fn init(snake_data: &HashMap<ApiSnakeId, SnakeData>, game_state: &ApiGameState) -> Turn {
+    fn init(game_state: &ApiGameState) -> Turn {
         Turn {
-            you: Snake::init(0, &game_state.you),
-            enemies: game_state.board.snakes.iter().map(|api_snake| {
-                Snake::init(snake_data[&api_snake.id].short_id, api_snake)
-            }).collect(),
-            food: game_state.board.food.iter().map(|c| Coord::init(*c)).collect(),
+            you: Snake::init(&game_state.you),
+            enemies: game_state.board.snakes.iter().map(|api_snake| Snake::init(api_snake)).collect(),
+            food: game_state.board.food.iter().map(|&c| Coord::init(c)).collect(),
+            next: None,
         }
     }
 
-    //todo: borrow immutably for advance()'s iterator and use this
     fn find_food(&self, coord: Coord) -> Option<usize> {
         self.food.iter().position(|&food| food == coord)
     }
@@ -43,23 +47,22 @@ impl Turn {
     //https://docs.battlesnake.com/rules
     //https://github.com/BattlesnakeOfficial/rules/blob/master/standard.go
     //https://github.com/BattlesnakeOfficial/engine/blob/master/rules/tick.go
-    pub fn advance(&mut self, moves: HashMap<u8, ApiDirection>, bound: Coord) {
-        if let Some(&dir) = moves.get(&0) {
-            self.you.slither(dir);
-            if let Some(head) = self.you.head() {
-                if let Some(food_index) = self.food.iter().position(|&food| food == head) {
-                    self.food.remove(food_index);
-                    self.you.feed(SNAKE_MAX_HEALTH);
-                }
+    pub fn advance(&mut self, you_move: ApiDirection, enemy_moves: &[ApiDirection], bound: Coord) {
+        self.you.slither(you_move);
+        if let Some(head) = self.you.head() {
+            if let Some(food_index) = self.find_food(head) {
+                self.food.remove(food_index);
+                self.you.feed(SNAKE_MAX_HEALTH);
             }
         }
-        for enemy in self.enemies.iter_mut() {
-            if let Some(&dir) = moves.get(&enemy.id) {
-                enemy.slither(dir);
-                if let Some(head) = enemy.head() {
-                    if let Some(food_index) = self.food.iter().position(|&food| food == head) {
+
+        for enemy_index in 0..self.enemies.len() {
+            if let Some(&dir) = enemy_moves.get(enemy_index) {
+                self.enemies[enemy_index].slither(dir);
+                if let Some(head) = self.enemies[enemy_index].head() {
+                    if let Some(food_index) = self.find_food(head) {
                         self.food.remove(food_index);
-                        enemy.feed(SNAKE_MAX_HEALTH);
+                        self.enemies[enemy_index].feed(SNAKE_MAX_HEALTH);
                     }
                 }
             }
@@ -67,66 +70,36 @@ impl Turn {
     }
 }
 
-//persistent info about snakes that doesn't vary turn-to-turn
-struct SnakeData {
+//persistent info about enemy snakes that doesn't vary turn-to-turn
+struct EnemyData {
     pub name: String,
-    pub short_id: u8,
+    //todo: try modeling enemy behaviour as a simple markov chain
 }
 
 pub struct Game {
     pub width: u32,
     pub height: u32,
-    pub turns: Vec<Option<Turn>>, //option in case we miss some calls
-    snake_data: HashMap<ApiSnakeId, SnakeData>,
+    pub turn: Turn,
+    enemy_data: HashMap<ApiSnakeId, EnemyData>,
 }
 
 impl Game {
     pub fn init(game_state: &ApiGameState) -> Game {
-        let mut snake_data = HashMap::new();
-        snake_data.insert(game_state.you.id.clone(), SnakeData {
-            name: game_state.you.name.clone(),
-            short_id: 0,
-        });
-
-        let mut game = Game {
+        Game {
             width: game_state.board.width,
             height: game_state.board.height,
-            turns: Vec::new(),
-            snake_data,
-        };
-        //populate the remaining snake data and the first turn
-        game.update(game_state);
-        game
+            turn: Turn::init(game_state),
+            enemy_data: HashMap::new(),
+        }
     }
 
     pub fn update(&mut self, game_state: &ApiGameState) {
-        //assign short IDs to snakes if they don't have one already
-        for api_snake in game_state.board.snakes.iter() {
-            if !self.snake_data.contains_key(&api_snake.id) {
-                self.snake_data.insert(api_snake.id.clone(), SnakeData {
-                    name: api_snake.name.clone(),
-                    short_id: self.snake_data.values().map(|d| d.short_id).max().unwrap() + 1
-                });
-            }
-        }
+        //don't really expect this to change, but just in case!
+        self.width = game_state.board.width;
+        self.height = game_state.board.height;
 
-        let new_turn = Turn::init(&self.snake_data, game_state);
-        let new_turn_index = game_state.turn as usize;
-
-        match self.turns.len().cmp(&new_turn_index) {
-            Equal => {
-                self.turns.push(Option::from(new_turn));
-            },
-            Less => {
-                //turns buffer isn't long enough to hold this turn
-                self.turns.resize_with(new_turn_index + 1, || Option::None);
-                self.turns[new_turn_index] = Option::from(new_turn);
-            },
-            Greater => {
-                //the new turn occurs somewhere in turns
-                self.turns[new_turn_index] = Option::from(new_turn);
-            }
-        }
+        //todo: copy over `next` turn data if it was available and accurate
+        self.turn = Turn::init(game_state);
     }
 }
 
@@ -149,10 +122,8 @@ mod tests {
 
         assert_eq!(game.height, 5);
         assert_eq!(game.width, 3);
-        assert_eq!(game.turns.len(), 1);
-        assert!(game.turns[0].is_some());
 
-        let turn: &Turn = game.turns[0].as_ref().unwrap();
+        let turn = &game.turn;
         assert_eq!(turn.food, vec![Coord::new(1, 0)]);
         assert_eq!(turn.enemies[0].head().unwrap(), Coord::new(0, 2));
         assert_eq!(turn.enemies[0].tail().unwrap(), Coord::new(1, 3));

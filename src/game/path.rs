@@ -7,7 +7,7 @@ use std::cmp::max;
 // (start, end, change in direction). If any consecutive pair of
 // nodes has a non-linear offset, the path between them is an
 // undefined shortest manhattan path.
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Path {
     nodes: Vec<Coord>,
 }
