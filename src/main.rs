@@ -4,7 +4,8 @@ mod brain;
 
 use std::collections::HashMap;
 use std::sync::Mutex;
-use actix_web::{web, get, post, App, HttpServer, Responder};
+use actix_web::{web, get, post, App as ActixApp, HttpServer, Responder};
+use clap::{App as ClapApp, Arg, SubCommand};
 use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId, ApiDirection};
 use crate::game::Game;
 use crate::brain::get_decision;
@@ -63,7 +64,9 @@ fn handle_ping() -> impl Responder {
     "pong"
 }
 
-fn main() {
+fn server(ip: &str, port: &str) {
+    let bind_to = format!("{}:{}", ip, port);
+
     let app_state = web::Data::new(AppState {
         games: Mutex::new(HashMap::new()),
         snake_config: ApiSnakeConfig {
@@ -74,7 +77,7 @@ fn main() {
     });
 
     HttpServer::new(move || {
-        App::new()
+        ActixApp::new()
             .register_data(app_state.clone())
             .service(handle_index)
             .service(handle_start)
@@ -82,8 +85,49 @@ fn main() {
             .service(handle_end)
             .service(handle_ping)
     })
-    .bind("127.0.0.1:8080")
-    .expect("Failed to bind")
+    .bind(bind_to.clone())
+    .unwrap_or_else(|_| panic!("Failed to bind to {}", bind_to))
     .run()
     .unwrap();
+}
+
+fn benchmark() {
+    //todo
+}
+
+fn main() {
+    let matches = ClapApp::new("BookWorm")
+        .subcommand(SubCommand::with_name("server")
+            .about("Runs the bot in server mode for connecting to a Battlesnake engine.")
+            .arg(Arg::with_name("port")
+                .short("p")
+                .help("HTTP port to listen on")
+                .takes_value(true)
+                .default_value("8080")
+            )
+            .arg(Arg::with_name("ip")
+                .help("Local IP to bind to")
+                .takes_value(true)
+                .default_value("127.0.0.1")
+            )
+        )
+        .subcommand(SubCommand::with_name("benchmark")
+            .about("Run a suite of performance tests")
+        )
+        .get_matches();
+
+    match matches.subcommand() {
+        ("server", Some(args)) => {
+            server(
+                args.value_of("ip").unwrap(),
+                args.value_of("port").unwrap()
+            );
+        },
+        ("benchmark", _) => {
+            benchmark();
+        },
+        _ => {
+            println!("Unknown argument!");
+        }
+    }
 }
