@@ -106,6 +106,7 @@ fn main() {
                 .default_value("8080")
             )
             .arg(Arg::with_name("ip")
+                .short("i")
                 .help("Local IP to bind to")
                 .takes_value(true)
                 .default_value("127.0.0.1")
