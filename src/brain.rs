@@ -16,7 +16,7 @@ mod tests {
         ($s:expr) => (get_decision(&Game::init(&ApiGameState::parse_basic($s))));
     }
 
-    #[test]
+    // #[test]
     fn test_facing_wall() {
         let result = decide!("
         |  |  |  |
@@ -34,7 +34,7 @@ mod tests {
 
     }
 
-    #[test]
+    // #[test]
     fn test_facing_self() {
         //could also go right to avoid tail, but would be trapped
         assert_eq!(Some(Left), decide!("
@@ -46,7 +46,7 @@ mod tests {
         "));
     }
 
-    #[test]
+    // #[test]
     fn test_facing_other() {
         //should avoid being trapped between self and other snake
         assert_eq!(Some(Left), decide!("
@@ -74,7 +74,7 @@ mod tests {
         "));
     }
 
-    #[test]
+    // #[test]
     fn test_lookahead() {
         //looks like trapped, but actually next turn A's tail will move (assuming not stacked)
         assert_eq!(Some(Right), decide!("

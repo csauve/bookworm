@@ -1,5 +1,6 @@
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 use super::{Coord, Unit, UnitAbs};
+use std::cmp::min;
 
 pub const ZERO: Offset = Offset {
     dx: 0,
@@ -35,6 +36,28 @@ impl Offset {
     #[inline]
     pub fn manhattan_dist(self) -> UnitAbs {
         self.dx.abs() as UnitAbs + self.dy.abs() as UnitAbs
+    }
+
+    #[inline]
+    pub fn abs(&self) -> Offset {
+        Offset {
+            dx: self.dx.abs(),
+            dy: self.dy.abs(),
+        }
+    }
+
+    pub fn cap_dist(&mut self, dist: UnitAbs) -> Offset {
+        if self.dx >= self.dy {
+            let dx = self.dx.signum() * min(self.dx.abs() as UnitAbs, dist) as Unit;
+            let remainder = dist - dx as UnitAbs;
+            let dy = self.dy.signum() * min(self.dy.abs() as UnitAbs, remainder) as Unit;
+            Offset {dx, dy}
+        } else {
+            let dy = self.dy.signum() * min(self.dy.abs() as UnitAbs, dist) as Unit;
+            let remainder = dist - dy as UnitAbs;
+            let dx = self.dx.signum() * min(self.dx.abs() as UnitAbs, remainder) as Unit;
+            Offset {dx, dy}
+        }
     }
 }
 
@@ -92,7 +115,9 @@ mod tests {
 
         let mut c = Offset::new(1, 1);
         c += Offset::new(2, -1);
-        assert_eq!(c, Offset::new(2, 0))
+        assert_eq!(c, Offset::new(3, 0));
+        c -= Offset::new(-1, 3);
+        assert_eq!(c, Offset::new(4, -3));
     }
 
     #[test]
@@ -100,7 +125,7 @@ mod tests {
         assert!(Offset::new(0, 10).linear());
         assert!(Offset::new(-1, 0).linear());
         assert!(!Offset::new(-1, 1).linear());
-        assert!(!Offset::new(0, 0).linear());
+        assert!(!ZERO.linear());
     }
 
     #[test]
@@ -112,5 +137,26 @@ mod tests {
         assert_eq!(Offset::new(-10, 10).manhattan_dist(), 20);
         assert_eq!(Offset::new(1, 2).manhattan_dist(), 3);
         assert_eq!(Offset::new(2, 1).manhattan_dist(), 3);
+    }
+
+    #[test]
+    fn test_cap_dist() {
+        macro_rules! cap_check {
+            ($offset:expr, $dist:expr, $expect:expr) => (
+                assert_eq!($offset.cap_dist($dist), $expect);
+                assert_eq!($offset.cap_dist($dist).manhattan_dist(), min($dist, $offset.manhattan_dist()));
+            );
+        }
+
+        cap_check!(ZERO, 10, ZERO);
+        cap_check!(Offset::new(1, 0), 10, Offset::new(1, 0));
+        cap_check!(Offset::new(1, 1), 10, Offset::new(1, 1));
+        cap_check!(Offset::new(1, 1), 0, ZERO);
+        cap_check!(Offset::new(10, 0), 0, ZERO);
+        cap_check!(Offset::new(0, -30), 20, Offset::new(0, -20));
+        cap_check!(Offset::new(10, -20), 20, Offset::new(10, -10));
+        cap_check!(Offset::new(10, -20), 10, Offset::new(10, 0));
+        cap_check!(Offset::new(10, -20), 5, Offset::new(5, 0));
+        cap_check!(Offset::new(10, 0), 9, Offset::new(9, 0));
     }
 }

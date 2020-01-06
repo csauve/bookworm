@@ -12,6 +12,8 @@ pub use offset::*;
 pub use path::*;
 pub use snake::*;
 
+const SNAKE_MAX_HEALTH: Health = 100;
+
 //todo: can state be broken up in a way that allows memoization, avoiding cycles?
 //todo: store probabilities and scores in the structure; update when invalidated?
 
@@ -24,18 +26,44 @@ pub struct Turn {
 impl Turn {
     fn init(snake_data: &HashMap<ApiSnakeId, SnakeData>, game_state: &ApiGameState) -> Turn {
         Turn {
-            you: Snake::init(0, &game_state.you)
-                .expect("API game state contained invalid `you` snake. Wat do!?"),
-            enemies: game_state.board.snakes.iter().filter_map(|api_snake| {
+            you: Snake::init(0, &game_state.you),
+            enemies: game_state.board.snakes.iter().map(|api_snake| {
                 Snake::init(snake_data[&api_snake.id].short_id, api_snake)
             }).collect(),
             food: game_state.board.food.iter().map(|c| Coord::init(*c)).collect(),
         }
     }
 
+    //todo: borrow immutably for advance()'s iterator and use this
+    fn find_food(&self, coord: Coord) -> Option<usize> {
+        self.food.iter().position(|&food| food == coord)
+    }
+
+    //todo: these rules seem to conflict about order
     //https://docs.battlesnake.com/rules
+    //https://github.com/BattlesnakeOfficial/rules/blob/master/standard.go
+    //https://github.com/BattlesnakeOfficial/engine/blob/master/rules/tick.go
     pub fn advance(&mut self, moves: HashMap<u8, ApiDirection>, bound: Coord) {
-        //todo
+        if let Some(&dir) = moves.get(&0) {
+            self.you.slither(dir);
+            if let Some(head) = self.you.head() {
+                if let Some(food_index) = self.food.iter().position(|&food| food == head) {
+                    self.food.remove(food_index);
+                    self.you.feed(SNAKE_MAX_HEALTH);
+                }
+            }
+        }
+        for enemy in self.enemies.iter_mut() {
+            if let Some(&dir) = moves.get(&enemy.id) {
+                enemy.slither(dir);
+                if let Some(head) = enemy.head() {
+                    if let Some(food_index) = self.food.iter().position(|&food| food == head) {
+                        self.food.remove(food_index);
+                        enemy.feed(SNAKE_MAX_HEALTH);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -126,9 +154,9 @@ mod tests {
 
         let turn: &Turn = game.turns[0].as_ref().unwrap();
         assert_eq!(turn.food, vec![Coord::new(1, 0)]);
-        assert_eq!(turn.enemies[0].head(), Coord::new(0, 2));
-        assert_eq!(turn.enemies[0].tail(), Coord::new(1, 3));
-        assert_eq!(turn.you.head(), Coord::new(2, 1));
-        assert_eq!(turn.you.tail(), Coord::new(2, 2));
+        assert_eq!(turn.enemies[0].head().unwrap(), Coord::new(0, 2));
+        assert_eq!(turn.enemies[0].tail().unwrap(), Coord::new(1, 3));
+        assert_eq!(turn.you.head().unwrap(), Coord::new(2, 1));
+        assert_eq!(turn.you.tail().unwrap(), Coord::new(2, 2));
     }
 }

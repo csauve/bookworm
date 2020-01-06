@@ -29,6 +29,7 @@ impl Coord {
         }
     }
 
+    #[inline]
     pub fn bounded_by(self, a: Coord, b: Coord) -> bool {
         let x_max = max(a.x, b.x);
         let x_min = min(a.x, b.x);
@@ -36,6 +37,11 @@ impl Coord {
         let y_min = min(a.y, b.y);
         self.x >= x_min && self.x <= x_max &&
             self.y >= y_min && self.y <= y_max
+    }
+
+    pub fn move_toward(&mut self, dest: Coord, dist: UnitAbs) {
+        let offset = (dest - *self).cap_dist(dist);
+        *self += offset;
     }
 }
 
@@ -46,7 +52,7 @@ impl Add<Offset> for Coord {
     fn add(self, rhs: Offset) -> Coord {
         Coord {
             x: self.x + rhs.dx,
-            y: self.x + rhs.dy,
+            y: self.y + rhs.dy,
         }
     }
 }
@@ -58,7 +64,7 @@ impl Sub<Offset> for Coord {
     fn sub(self, rhs: Offset) -> Coord {
         Coord {
             x: self.x - rhs.dx,
-            y: self.x - rhs.dy,
+            y: self.y - rhs.dy,
         }
     }
 }
@@ -68,7 +74,7 @@ impl Sub for Coord {
 
     #[inline]
     fn sub(self, rhs: Coord) -> Offset {
-        Offset::between(self, rhs)
+        Offset::between(rhs, self)
     }
 }
 
@@ -76,7 +82,7 @@ impl AddAssign<Offset> for Coord {
     #[inline]
     fn add_assign(&mut self, rhs: Offset) {
         self.x += rhs.dx;
-        self.x += rhs.dy;
+        self.y += rhs.dy;
     }
 }
 
@@ -84,7 +90,7 @@ impl SubAssign<Offset> for Coord {
     #[inline]
     fn sub_assign(&mut self, rhs: Offset) {
         self.x -= rhs.dx;
-        self.x -= rhs.dy;
+        self.y -= rhs.dy;
     }
 }
 
@@ -108,7 +114,7 @@ mod tests {
         let a = Coord {x: 1, y: 2};
         let b = Coord {x: 10, y: 0};
 
-        let ab = a - b;
+        let ab = b - a;
         assert_eq!(ab.dx, 9);
         assert_eq!(ab.dy, -2);
 
@@ -133,5 +139,16 @@ mod tests {
             Coord {x: 0, y: 4},
             Coord {x: 4, y: 6}
         ));
+    }
+
+    #[test]
+    fn test_move_toward() {
+        let mut coord = Coord::new(0, 0);
+
+        coord.move_toward(Coord::new(0, 10), 2);
+        assert_eq!(coord, Coord::new(0, 2));
+
+        coord.move_toward(Coord::new(-10, 2), 5);
+        assert_eq!(coord, Coord::new(-5, 2));
     }
 }
