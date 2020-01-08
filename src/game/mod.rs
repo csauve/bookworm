@@ -48,10 +48,12 @@ impl Turn {
     //https://github.com/BattlesnakeOfficial/rules/blob/master/standard.go
     //https://github.com/BattlesnakeOfficial/engine/blob/master/rules/tick.go
     pub fn advance(&mut self, you_move: ApiDirection, enemy_moves: &[ApiDirection], bound: Coord) {
+        let mut eaten_food: Vec<Coord> = Vec::new();
+
         self.you.slither(you_move);
         if let Some(head) = self.you.head() {
             if let Some(food_index) = self.find_food(head) {
-                self.food.remove(food_index);
+                eaten_food.push(self.food[food_index]);
                 self.you.feed(SNAKE_MAX_HEALTH);
             }
         }
@@ -61,11 +63,18 @@ impl Turn {
                 self.enemies[enemy_index].slither(dir);
                 if let Some(head) = self.enemies[enemy_index].head() {
                     if let Some(food_index) = self.find_food(head) {
-                        self.food.remove(food_index);
+                        eaten_food.push(self.food[food_index]);
                         self.enemies[enemy_index].feed(SNAKE_MAX_HEALTH);
                     }
                 }
             }
+        }
+
+        //all snakes get a chance to eat fairly before food is removed
+        if !eaten_food.is_empty() {
+            self.food = self.food.iter()
+                .filter_map(|f| if eaten_food.contains(f) {None} else {Some(*f)})
+                .collect();
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::api::{ApiSnake, ApiDirection};
-use super::{Offset, Path, Coord, ZERO};
+use super::{Path, Coord, ZERO};
 
 pub type Health = u8; //make this u16 if there will be health > 256
 
