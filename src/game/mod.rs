@@ -32,9 +32,9 @@ pub struct Turn {
 impl Turn {
     fn init(game_state: &ApiGameState) -> Turn {
         Turn {
-            you: Snake::init(&game_state.you),
-            enemies: game_state.board.snakes.iter().map(|api_snake| Snake::init(api_snake)).collect(),
-            food: game_state.board.food.iter().map(|&c| Coord::init(c)).collect(),
+            you: Snake::from_api(&game_state.you),
+            enemies: game_state.board.snakes.iter().map(Snake::from_api).collect(),
+            food: game_state.board.food.iter().map(Coord::from).collect(),
             next: None,
         }
     }

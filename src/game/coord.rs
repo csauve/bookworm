@@ -2,6 +2,7 @@ use crate::api::ApiCoords;
 use super::Offset;
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::cmp::{max, min};
+use std::convert::From;
 
 //should change these if board will be bigger
 pub type Unit = i8;
@@ -14,19 +15,31 @@ pub struct Coord {
     pub y: Unit,
 }
 
+impl From<ApiCoords> for Coord {
+    #[inline]
+    fn from(api_coords: ApiCoords) -> Self {
+        Coord {
+            x: api_coords.x as Unit,
+            y: api_coords.y as Unit,
+        }
+    }
+}
+
+impl From<&ApiCoords> for Coord {
+    #[inline]
+    fn from(api_coords: &ApiCoords) -> Self {
+        Coord {
+            x: api_coords.x as Unit,
+            y: api_coords.y as Unit,
+        }
+    }
+}
+
 impl Coord {
 
     #[inline]
     pub fn new(x: Unit, y: Unit) -> Coord {
         Coord {x, y}
-    }
-
-    #[inline]
-    pub fn init(api_coords: ApiCoords) -> Coord {
-        Coord {
-            x: api_coords.x as Unit,
-            y: api_coords.y as Unit,
-        }
     }
 
     #[inline]
@@ -37,11 +50,6 @@ impl Coord {
         let y_min = min(a.y, b.y);
         self.x >= x_min && self.x <= x_max &&
             self.y >= y_min && self.y <= y_max
-    }
-
-    pub fn move_toward(&mut self, dest: Coord, dist: UnitAbs) {
-        let offset = (dest - *self).cap_dist(dist);
-        *self += offset;
     }
 }
 
@@ -139,16 +147,5 @@ mod tests {
             Coord {x: 0, y: 4},
             Coord {x: 4, y: 6}
         ));
-    }
-
-    #[test]
-    fn test_move_toward() {
-        let mut coord = Coord::new(0, 0);
-
-        coord.move_toward(Coord::new(0, 10), 2);
-        assert_eq!(coord, Coord::new(0, 2));
-
-        coord.move_toward(Coord::new(-10, 2), 5);
-        assert_eq!(coord, Coord::new(-5, 2));
     }
 }

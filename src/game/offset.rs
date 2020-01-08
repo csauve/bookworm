@@ -1,6 +1,8 @@
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 use super::{Coord, Unit, UnitAbs};
+use crate::api::ApiDirection;
 use std::cmp::min;
+use std::convert::From;
 
 pub const ZERO: Offset = Offset {
     dx: 0,
@@ -11,6 +13,17 @@ pub const ZERO: Offset = Offset {
 pub struct Offset {
     pub dx: Unit,
     pub dy: Unit,
+}
+
+impl From<ApiDirection> for Offset {
+    fn from(dir: ApiDirection) -> Self {
+        match dir {
+            ApiDirection::Left => Offset::new(-1, 0),
+            ApiDirection::Right => Offset::new(1, 0),
+            ApiDirection::Up => Offset::new(0, -1),
+            ApiDirection::Down => Offset::new(0, 1),
+        }
+    }
 }
 
 impl Offset {

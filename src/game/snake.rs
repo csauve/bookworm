@@ -11,10 +11,10 @@ pub struct Snake {
 
 impl Snake {
 
-    pub fn init(api_snake: &ApiSnake) -> Snake {
+    pub fn from_api(api_snake: &ApiSnake) -> Snake {
         Snake {
             health: api_snake.health as Health,
-            body: Path::init(&api_snake.body),
+            body: Path::from_api(&api_snake.body),
         }
     }
 
@@ -43,13 +43,7 @@ impl Snake {
         if !self.starved() {
             self.health -= 1;
         }
-        let offset = match dir {
-            ApiDirection::Left => Offset::new(-1, 0),
-            ApiDirection::Right => Offset::new(1, 0),
-            ApiDirection::Up => Offset::new(0, -1),
-            ApiDirection::Down => Offset::new(0, 1),
-        };
-        self.body.slide_start(offset);
+        self.body.slide_start(dir.into());
     }
 }
 

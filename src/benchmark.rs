@@ -1,10 +1,23 @@
 use crate::game::*;
-use std::time::{SystemTime, Duration};
+use crate::api::ApiDirection::*;
+use std::time::{SystemTime};
+
+macro_rules! timed {
+    ($name:expr, $code:block) => ({
+        let start = SystemTime::now();
+        $code
+        let duration = SystemTime::now().duration_since(start).unwrap();
+        println!("{}: {}ms", $name, duration.as_millis());
+    });
+}
 
 //todo: how can I import my path! macro here?
 pub fn run_benchmark() {
-    println!("PATH");
-    let mut path = Path::new(&[
+    path_slide();
+}
+
+fn path_slide() {
+    let mut path = Path::from_slice(&[
         Coord::new(0, 0),
         Coord::new(1, 0),
         Coord::new(2, 0),
@@ -17,18 +30,11 @@ pub fn run_benchmark() {
         Coord::new(9, 0),
     ]);
 
-    let path_side = 10;
-    let mut times = 100_000;
+    let moves = &[Down, Right, Down, Left, Down, Right, Right, Right, Up, Left, Up, Right, Up, Left, Left, Left];
 
-    let start = SystemTime::now();
-    while times > 0 {
-        path.slide_start(Offset::new(0, path_side));
-        path.slide_start(Offset::new(path_side, 0));
-        path.slide_start(Offset::new(0, -path_side));
-        path.slide_start(Offset::new(-path_side, 0));
-        times -= 1;
-    }
-
-    let duration = SystemTime::now().duration_since(start).unwrap();
-    println!("loop: {}ms", duration.as_millis());
+    timed!("path_slide", {
+        for i in 0..100_000 {
+            path.slide_start(Offset::from(moves[i % moves.len()]));
+        }
+    });
 }
