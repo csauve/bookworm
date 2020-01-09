@@ -41,26 +41,19 @@ impl Turn {
         }
     }
 
-    pub fn you(&self) -> &Snake {
-        self.snakes.first().unwrap()
-    }
-
-    pub fn enemies(&self) -> &[Snake] {
-        if self.snakes.len() > 1 {
-            &self.snakes[1..]
-        } else {
-            &[]
-        }
-    }
-
-    fn find_food(&self, coord: Coord) -> Option<usize> {
-        self.food.iter().position(|&food| food == coord)
+    fn update(&mut self, game_state: &ApiGameState) {
+        self.snakes = once(game_state.you).chain(game_state.board.snakes).map(|s| Snake::from_api(&s)).collect();
+        self.food = game_state.board.food.iter().map(Coord::from).collect();
+        self.next = self.next.map(|turns| {
+            //todo: need to find matching turn in next turns, then use its `next`
+            turns
+        });
     }
 
     //https://docs.battlesnake.com/rules
     //https://github.com/BattlesnakeOfficial/rules/blob/master/standard.go
     //https://github.com/BattlesnakeOfficial/engine/blob/master/rules/tick.go
-    pub fn tick(&mut self, snake_moves: &[ApiDirection], bound: Coord) -> Result<Ok, &'static str> {
+    pub fn predict(&mut self, snake_moves: &[ApiDirection], bound: Coord) -> Option<Turn> {
         let mut eaten_food: Vec<Coord> = Vec::new();
 
         for snake_index in 0..self.snakes.len() {
@@ -112,10 +105,31 @@ impl Turn {
         //care about preserving order. This should just be O(dead_snakes)
         for dead_snake_index in dead_snakes.iter().rev() {
             if *dead_snake_index == 0 {
-                //the `you` snake died...
+                return None;
             }
             self.snakes.swap_remove(*dead_snake_index);
         }
+
+        //todo
+        Some(Turn {
+
+        });
+    }
+
+    pub fn you(&self) -> &Snake {
+        self.snakes.first().unwrap()
+    }
+
+    pub fn enemies(&self) -> &[Snake] {
+        if self.snakes.len() > 1 {
+            &self.snakes[1..]
+        } else {
+            &[]
+        }
+    }
+
+    fn find_food(&self, coord: Coord) -> Option<usize> {
+        self.food.iter().position(|&food| food == coord)
     }
 }
 
@@ -128,7 +142,7 @@ struct EnemyData {
 pub struct Game {
     bound: Coord,
     pub turn: Turn,
-    enemy_data: HashMap<ApiSnakeId, EnemyData>,
+    enemy_data: HashMap<ApiSnakeId, EnemyData>, //todo: just keep alive snakes?
 }
 
 impl Game {
@@ -149,13 +163,8 @@ impl Game {
             game_state.board.width as Unit - 1,
             game_state.board.height as Unit - 1
         );
-
-        let prev_turn = &self.turn;
-        let new_turn = Turn::init(game_state);
-
-        //todo: copy over `next` turn data if it was available and accurate
-
-        self.turn = new_turn;
+        self.turn.update(game_state);
+        //todo: update enemy_data?
     }
 
     pub fn width(&self) -> Unit {
