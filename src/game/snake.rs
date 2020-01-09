@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use crate::api::{ApiSnake, ApiDirection};
 use super::{Path, Coord, ZERO};
 
@@ -18,8 +19,23 @@ impl Snake {
         }
     }
 
+    pub fn get_default_move(&self) -> ApiDirection {
+        if let Some(head) = self.head() {
+            if let Some(neck) = self.neck() {
+                if let Ok(dir) = ApiDirection::try_from(head - neck) {
+                    return dir;
+                }
+            }
+        }
+        ApiDirection::Up
+    }
+
     pub fn head(&self) -> Option<Coord> {
         self.body.start()
+    }
+
+    pub fn neck(&self) -> Option<Coord> {
+        self.body.get_node(1)
     }
 
     pub fn tail(&self) -> Option<Coord> {
@@ -44,6 +60,10 @@ impl Snake {
             self.health -= 1;
         }
         self.body.slide_start(dir.into());
+    }
+
+    pub fn size(&self) -> usize {
+        self.body.num_nodes()
     }
 }
 

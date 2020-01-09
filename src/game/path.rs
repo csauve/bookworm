@@ -73,8 +73,8 @@ impl Path {
     }
 
     //each node, and the space between them, is to be considered a step
-    pub fn num_nodes(&self) -> UnitAbs {
-        self.nodes.len() as UnitAbs
+    pub fn num_nodes(&self) -> usize {
+        self.nodes.len()
     }
 
     pub fn start(&self) -> Option<Coord> {
@@ -83,6 +83,10 @@ impl Path {
 
     pub fn end(&self) -> Option<Coord> {
         self.nodes.last().cloned()
+    }
+
+    pub fn get_node(&self, index: usize) -> Option<Coord> {
+        self.nodes.get(index).cloned()
     }
 
     pub fn intersects(&self, coord: Coord) -> bool {

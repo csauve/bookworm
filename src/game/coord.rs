@@ -42,6 +42,7 @@ impl Coord {
         Coord {x, y}
     }
 
+    //inclusive range
     #[inline]
     pub fn bounded_by(self, a: Coord, b: Coord) -> bool {
         let x_max = max(a.x, b.x);
