@@ -89,6 +89,7 @@ impl Path {
         self.nodes.get(index).cloned()
     }
 
+    //todo: maybe won't need this code
     pub fn intersects(&self, coord: Coord) -> bool {
         !self.nodes.is_empty() && (
             //check the start and end first since they're likely to be common intersection points
@@ -96,6 +97,10 @@ impl Path {
             self.end().unwrap() == coord ||
             self.nodes.windows(2).any(|pair| {coord.bounded_by(pair[0], pair[1])})
         )
+    }
+
+    pub fn contains_node(&self, coord: Coord) -> bool {
+        self.nodes.contains(&coord)
     }
 
     pub fn start_self_intersects(&self) -> bool {

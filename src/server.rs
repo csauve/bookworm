@@ -3,7 +3,6 @@ use std::sync::Mutex;
 use actix_web::{web, get, post, App, HttpServer, Responder};
 use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId, ApiDirection};
 use crate::game::Game;
-use crate::brain::get_decision;
 
 struct AppState {
     snake_config: ApiSnakeConfig,
@@ -31,12 +30,12 @@ fn handle_move(app_state: web::Data<AppState>, game_state: web::Json<ApiGameStat
     let direction = match games.get_mut(&game_state.game.id) {
         Some(game) => {
             game.update(&game_state);
-            get_decision(game)
+            game.get_decision()
         },
         None => {
             //maybe we missed the "/start" call?
             let game = Game::init(&game_state);
-            let decision = get_decision(&game);
+            let decision = game.get_decision();
             games.insert(game_state.game.id.clone(), game);
             decision
         }

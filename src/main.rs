@@ -1,6 +1,5 @@
 mod api;
 mod game;
-mod brain;
 mod server;
 mod benchmark;
 

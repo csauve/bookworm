@@ -12,42 +12,47 @@ pub struct Snake {
 
 impl Snake {
 
-    pub fn from_api(api_snake: &ApiSnake) -> Snake {
-        Snake {
+    pub fn from_api(api_snake: &ApiSnake) -> Result<Snake, &'static str> {
+        if api_snake.body.is_empty() {
+            return Err("Malformed snake: body is empty")
+        }
+        Ok(Snake {
             health: api_snake.health as Health,
             body: Path::from_api(&api_snake.body),
-        }
+        })
     }
 
     pub fn get_default_move(&self) -> ApiDirection {
-        if let Some(head) = self.head() {
-            if let Some(neck) = self.neck() {
-                if let Ok(dir) = ApiDirection::try_from(head - neck) {
-                    return dir;
-                }
+        if let Some(neck) = self.neck() {
+            if let Ok(dir) = ApiDirection::try_from(self.head() - neck) {
+                return dir;
             }
         }
         ApiDirection::Up
     }
 
-    pub fn head(&self) -> Option<Coord> {
-        self.body.start()
+    pub fn head(&self) -> Coord {
+        self.body.start().unwrap()
     }
 
     pub fn neck(&self) -> Option<Coord> {
         self.body.get_node(1)
     }
 
-    pub fn tail(&self) -> Option<Coord> {
-        self.body.end()
+    pub fn tail(&self) -> Coord {
+        self.body.end().unwrap()
     }
 
     pub fn starved(&self) -> bool {
         self.health == 0
     }
 
-    pub fn self_collided(&self) -> bool {
-        self.body.start_self_intersects()
+    pub fn hit_body_of(&self, other: &Snake) -> bool {
+        other.body.contains_node(self.head()) && other.head() != self.head()
+    }
+
+    pub fn loses_head_to_head(&self, other: &Snake) -> bool {
+        self.head() == other.head() && self.size() <= other.size()
     }
 
     pub fn feed(&mut self, new_health: Health) {
