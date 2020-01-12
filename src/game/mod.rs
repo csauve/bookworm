@@ -5,11 +5,16 @@ mod snake;
 mod turn;
 
 use crate::api::{ApiGameState, ApiDirection};
-use coord::*;
+use coord::{Coord, Unit};
+use turn::Turn;
+
+const MAX_LOOKAHEAD_DEPTH: u8 = 10;
+
+type Score = f32;
 
 pub struct Game {
     bound: Coord,
-    current_turn: Turn,
+    root_turn: Turn,
 }
 
 impl Game {
@@ -19,7 +24,7 @@ impl Game {
                 game_state.board.width as Unit - 1,
                 game_state.board.height as Unit - 1
             ),
-            current_turn: Turn::init(game_state),
+            root_turn: Turn::init(game_state),
         }
     }
 
@@ -29,15 +34,16 @@ impl Game {
             game_state.board.width as Unit - 1,
             game_state.board.height as Unit - 1
         );
-        self.current_turn.update(game_state);
+        self.root_turn.update(game_state);
     }
 
-    pub fn width(&self) -> Unit {
-        self.bound.x + 1
-    }
-
-    pub fn height(&self) -> Unit {
-        self.bound.y + 1
+    pub fn get_decision(&self) -> ApiDirection {
+        *Game::evaluate_turn(&self.root_turn, MAX_LOOKAHEAD_DEPTH)
+            .iter()
+            .max_by(|(_, scoreA), (_, scoreB)| scoreA.partial_cmp(scoreB).unwrap())
+            .map(|(dir, _)| dir)
+            //if we can't find a move, just pick default and pray to snake jesusSsSSss
+            .unwrap_or(&self.root_turn.you().get_default_move())
     }
 
     //The space of next turns is basically the cartesian product of the sets of each snake's
@@ -50,12 +56,17 @@ impl Game {
     //We should instead guide longer-term planning and strategy with heuristics, and consider
     //the turn tree to be like "guard rails" that prevent poor decisions in the short term like
     //local maxima in the heuristic.
-    pub fn get_decision(&self) -> Option<ApiDirection> {
-        //todo: can state be broken up in a way that allows memoization, avoiding cycles?
-        //todo: store probabilities and scores in the structure; update when invalidated?
+    fn evaluate_turn(turn: &Turn, max_depth: u8) -> Vec<(ApiDirection, Score)> {
 
-        //todo
-        Some(ApiDirection::Up)
+
+    }
+
+    pub fn width(&self) -> Unit {
+        self.bound.x + 1
+    }
+
+    pub fn height(&self) -> Unit {
+        self.bound.y + 1
     }
 }
 
@@ -84,7 +95,7 @@ mod tests {
         assert_eq!(game.height(), 5);
         assert_eq!(game.width(), 3);
 
-        let turn = &game.current_turn;
+        let turn = &game.root_turn;
         assert_eq!(turn.food, vec![Coord::new(1, 0)]);
         assert_eq!(turn.enemies()[0].head(), Coord::new(0, 2));
         assert_eq!(turn.enemies()[0].tail(), Coord::new(1, 3));

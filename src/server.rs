@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use actix_web::{web, get, post, App, HttpServer, Responder};
-use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId, ApiDirection};
+use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId};
 use crate::game::Game;
 
 struct AppState {
@@ -40,10 +40,7 @@ fn handle_move(app_state: web::Data<AppState>, game_state: web::Json<ApiGameStat
             decision
         }
     };
-    web::Json(ApiMove {
-        //if we can't find a move, just move right and pray to snake jesusSsSSss
-        move_dir: direction.unwrap_or(ApiDirection::Right)
-    })
+    web::Json(ApiMove {move_dir: direction})
 }
 
 #[post("/end")]

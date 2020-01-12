@@ -1,8 +1,8 @@
 use std::ops::{Add, Sub, AddAssign, SubAssign};
-use super::{Coord, Unit, UnitAbs};
+use super::coord::{Coord, Unit, UnitAbs};
 use crate::api::ApiDirection;
 use std::cmp::min;
-use std::convert::From;
+use std::convert::{From, TryFrom};
 
 pub const ZERO: Offset = Offset {
     dx: 0,
@@ -22,6 +22,19 @@ impl From<ApiDirection> for Offset {
             ApiDirection::Right => Offset::new(1, 0),
             ApiDirection::Up => Offset::new(0, -1),
             ApiDirection::Down => Offset::new(0, 1),
+        }
+    }
+}
+
+impl TryFrom<Offset> for ApiDirection {
+    type Error = &'static str;
+    fn try_from(offset: Offset) -> Result<Self, Self::Error> {
+        match (offset.dx, offset.dy) {
+            (-1, 0) => Ok(ApiDirection::Left),
+            (1, 0) => Ok(ApiDirection::Right),
+            (0, -1) => Ok(ApiDirection::Up),
+            (0, 1) => Ok(ApiDirection::Down),
+            _ => Err("Offset is not a unit cardinal direction")
         }
     }
 }

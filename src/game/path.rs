@@ -1,5 +1,6 @@
 use crate::api::{ApiCoords};
-use super::{Offset, Coord, UnitAbs};
+use super::coord::{Coord, UnitAbs};
+use super::offset::{Offset};
 
 // A path connects a series of coordinates with direction.
 // If any consecutive pair of nodes has a non-linear offset,

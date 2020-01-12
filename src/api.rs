@@ -1,6 +1,4 @@
-use std::convert::TryFrom;
 use serde::{Serialize, Deserialize};
-use crate::game::Offset;
 
 pub type ApiGameId = String;
 pub type ApiSnakeId = String;
@@ -61,19 +59,6 @@ pub enum ApiDirection {
 pub struct ApiMove {
     #[serde(rename = "move")]
     pub move_dir: ApiDirection,
-}
-
-impl TryFrom<Offset> for ApiDirection {
-    type Error = &'static str;
-    fn try_from(offset: Offset) -> Result<Self, Self::Error> {
-        match (offset.dx, offset.dy) {
-            (-1, 0) => Ok(ApiDirection::Left),
-            (1, 0) => Ok(ApiDirection::Right),
-            (0, -1) => Ok(ApiDirection::Up),
-            (0, 1) => Ok(ApiDirection::Down),
-            _ => Err("Offset is not a unit cardinal direction")
-        }
-    }
 }
 
 #[cfg(test)]

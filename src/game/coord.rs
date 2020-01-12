@@ -1,5 +1,5 @@
 use crate::api::ApiCoords;
-use super::Offset;
+use super::offset::Offset;
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::cmp::{max, min};
 use std::convert::From;

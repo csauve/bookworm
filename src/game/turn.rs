@@ -8,19 +8,20 @@ use super::coord::Coord;
 const SNAKE_MAX_HEALTH: Health = 100;
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 
+#[derive(PartialEq, Debug)]
 pub enum AdvanceResult {
     YouLive, YouDie
 }
 
+#[derive(Clone, PartialEq, Debug)]
 pub struct Turn {
     //must contain at least 1 snake (the `you` snake, at index 0)
     pub snakes: Vec<Snake>,
     pub food: Vec<Coord>,
-    pub next: Option<Vec<Turn>>
 }
 
 impl Turn {
-    fn init(game_state: &ApiGameState) -> Turn {
+    pub fn init(game_state: &ApiGameState) -> Turn {
         Turn {
             //todo: isnt this a move out of borrow???
             snakes: once(game_state.you)
@@ -28,20 +29,15 @@ impl Turn {
                 .map(|s| Snake::from_api(&s).unwrap())
                 .collect(),
             food: game_state.board.food.iter().map(Coord::from).collect(),
-            next: None,
         }
     }
 
-    fn update(&mut self, game_state: &ApiGameState) {
+    pub fn update(&mut self, game_state: &ApiGameState) {
         self.snakes = once(game_state.you)
             .chain(game_state.board.snakes)
             .map(|s| Snake::from_api(&s).unwrap())
             .collect();
         self.food = game_state.board.food.iter().map(Coord::from).collect();
-        self.next = self.next.map(|turns| {
-            //todo: need to find matching turn in next turns, then use its `next`
-            turns
-        });
     }
 
     //Applies game rules to the turn in order to predict the result. Note that we can't predict food spawns.
@@ -65,7 +61,7 @@ impl Turn {
                 return Some(snake_index);
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
-                //short circuit on body hits since probably more likely than head-to-head
+                //short circuit on body hits since probably more likely than head-to-head?
                 if snake.hit_body_of(other_snake) || other_snake_index != snake_index && snake.loses_head_to_head(other_snake) {
                     //TWO SNAKES ENTER, ONE SNAKE LEAVES
                     return Some(snake_index);
@@ -110,5 +106,53 @@ impl Turn {
 
     pub fn infer_you_move(prev_turn: &Turn, next_turn: &Turn) -> Result<ApiDirection, &'static str> {
         ApiDirection::try_from(next_turn.you().head() - prev_turn.you().head())
+    }
+}
+
+//todo: write more tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::api::ApiDirection::*;
+    use super::super::coord::Unit;
+    use super::AdvanceResult::*;
+
+    macro_rules! advance {
+        ($moves:expr, $curr:expr) => (
+            {
+                let game_state = ApiGameState::parse_basic($curr);
+                let bound = Coord::new(
+                    game_state.board.width as Unit - 1,
+                    game_state.board.height as Unit - 1
+                );
+                let prev = Turn::init(&game_state);
+                let mut next = prev.clone();
+                let result = next.advance($moves, bound);
+                (prev, next, result)
+            }
+        );
+    }
+
+    #[test]
+    fn advance() {
+        let (prev, next, result) = advance!(&[Up, Left], "
+        |  |()|  |
+        |  |  |Y0|
+        |A0|A1|Y1|
+        |  |A2|  |
+        |  |  |  |
+        ");
+
+        //the Y snake didn't hit any walls
+        assert_eq!(result, YouLive);
+        //no food was eaten
+        assert_eq!(prev.food, next.food);
+        assert_eq!(prev.food, next.food);
+        //health of snakes goes down each turn
+        assert_eq!(next.you().health, prev.you().health - 1);
+        //snake A hit a wall
+        assert!(next.enemies().is_empty());
+        //moved Y snake according to intended direction
+        assert_eq!(next.you().head(), Coord::new(0, 2));
     }
 }
