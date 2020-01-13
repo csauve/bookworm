@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use crate::api::{ApiSnake, ApiDirection};
+use crate::api::ApiDirection::{Up, Left, Right, Down};
 use super::path::Path;
 use super::coord::Coord;
 use super::offset::ZERO as ZERO_OFFSET;
@@ -31,7 +32,21 @@ impl Snake {
                 return dir;
             }
         }
-        ApiDirection::Up
+        Up
+    }
+
+    pub fn get_legal_moves(&self) -> &'static[ApiDirection] {
+        if let Some(neck) = self.neck() {
+            if let Ok(dir) = ApiDirection::try_from(self.head() - neck) {
+                return match dir {
+                    Up => &[Left, Up, Right],
+                    Left => &[Down, Left, Up],
+                    Right => &[Up, Right, Down],
+                    Down => &[Right, Down, Left],
+                }
+            }
+        }
+        &[Left, Right, Up, Down]
     }
 
     //returns location of the snake's head, where movements are made from
@@ -120,8 +135,8 @@ mod tests {
 
         assert_eq!(snake.head(), Coord::new(1, 0));
         assert_eq!(snake.neck().unwrap(), Coord::new(2, 0));
-        assert_eq!(snake.tail(), Coord::new(3, 0));
-        assert_eq!(snake.get_default_move(), ApiDirection::Left);
+        assert_eq!(snake.tail(), Coord::new(2, 1));
+        assert_eq!(snake.get_default_move(), Left);
 
         //unusual case, but should still work...
         let snake = Snake::from_api(&ApiSnake {
@@ -136,7 +151,7 @@ mod tests {
         assert_eq!(snake.head(), Coord::new(1, 0));
         assert!(snake.neck().is_none());
         assert_eq!(snake.head(), Coord::new(1, 0));
-        assert_eq!(snake.get_default_move(), ApiDirection::Up);
+        assert_eq!(snake.get_default_move(), Up);
     }
 
     #[test]

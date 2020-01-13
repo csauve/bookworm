@@ -1,4 +1,6 @@
-use crate::game::*;
+use crate::game::path::Path;
+use crate::game::coord::Coord;
+use crate::game::offset::Offset;
 use crate::api::ApiDirection::*;
 use std::time::{SystemTime};
 

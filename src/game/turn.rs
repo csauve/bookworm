@@ -23,35 +23,44 @@ pub struct Turn {
 impl Turn {
     pub fn init(game_state: &ApiGameState) -> Turn {
         Turn {
-            //todo: isnt this a move out of borrow???
-            snakes: once(game_state.you)
-                .chain(game_state.board.snakes)
-                .map(|s| Snake::from_api(&s).unwrap())
+            snakes: once(&game_state.you)
+                .chain(game_state.board.snakes.iter())
+                .map(|s| Snake::from_api(s).unwrap())
                 .collect(),
             food: game_state.board.food.iter().map(Coord::from).collect(),
         }
     }
 
     pub fn update(&mut self, game_state: &ApiGameState) {
-        self.snakes = once(game_state.you)
-            .chain(game_state.board.snakes)
-            .map(|s| Snake::from_api(&s).unwrap())
+        self.snakes = once(&game_state.you)
+            .chain(game_state.board.snakes.iter())
+            .map(|s| Snake::from_api(s).unwrap())
             .collect();
         self.food = game_state.board.food.iter().map(Coord::from).collect();
     }
 
+    pub fn get_legal_moves(&self, bound: Coord) -> Vec<Vec<ApiDirection>> {
+        self.snakes.iter().map(|snake| {
+            snake.get_legal_moves().iter().cloned()
+                .filter(|&dir| (snake.head() + dir.into()).bounded_by(ORIGIN, bound))
+                .collect()
+        }).collect()
+    }
+
     //Applies game rules to the turn in order to predict the result. Note that we can't predict food spawns.
     pub fn advance(&mut self, snake_moves: &[ApiDirection], bound: Coord) -> AdvanceResult {
-        //all snakes get a chance to eat fairly before food is removed
-        let eaten_food_indices = self.snakes.iter_mut().enumerate().filter_map(|(snake_index, snake)| {
-            let dir = *snake_moves.get(snake_index).unwrap_or(&snake.get_default_move());
-            snake.slither(dir);
-            let found_food = self.find_food(self.snakes[snake_index].head());
-            if found_food.is_some() {
-                snake.feed(SNAKE_MAX_HEALTH);
+        let mut eaten_food_indices: HashSet<usize> = HashSet::new();
+
+        //move snakes and find eaten food
+        for snake_index in 0..self.snakes.len() {
+            let dir = snake_moves.get(snake_index).cloned().unwrap_or_else(|| self.snakes[snake_index].get_default_move());
+            self.snakes[snake_index].slither(dir);
+            if let Some(food_index) = self.find_food(self.snakes[snake_index].head()) {
+                //all snakes get a chance to eat fairly before food is removed
+                self.snakes[snake_index].feed(SNAKE_MAX_HEALTH);
+                eaten_food_indices.insert(food_index);
             }
-            found_food
-        }).collect::<HashSet<usize>>();
+        }
 
         let dead_snake_indices = self.snakes.iter().enumerate().filter_map(|(snake_index, snake)| {
             if snake.starved() {
@@ -82,7 +91,7 @@ impl Turn {
         }
         if !dead_snake_indices.is_empty() {
             self.snakes = self.snakes.iter().enumerate()
-                .filter_map(|(i, s)| if dead_snake_indices.contains(&i) {None} else {Some(*s)})
+                .filter_map(|(i, s)| if dead_snake_indices.contains(&i) {None} else {Some(s.clone())})
                 .collect();
         }
         AdvanceResult::YouLive
@@ -153,6 +162,6 @@ mod tests {
         //snake A hit a wall
         assert!(next.enemies().is_empty());
         //moved Y snake according to intended direction
-        assert_eq!(next.you().head(), Coord::new(0, 2));
+        assert_eq!(next.you().head(), Coord::new(2, 0));
     }
 }

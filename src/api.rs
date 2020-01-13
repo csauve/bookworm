@@ -46,7 +46,7 @@ pub struct ApiGameState {
     pub you: ApiSnake,
 }
 
-#[derive(Serialize, Copy, Clone, PartialEq, Debug)]
+#[derive(Serialize, Copy, Clone, PartialEq, Debug, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiDirection {
     Up,

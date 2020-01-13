@@ -195,7 +195,7 @@ mod tests {
             (2, 0),
         ]);
 
-        check_len!(2, 3, path![
+        check_len!(2, 2, path![
             (0, 0),
             (1, 1),
         ]);
@@ -218,7 +218,7 @@ mod tests {
             (15, 12),
         ]);
 
-        check_len!(12, 13, path![
+        check_len!(10, 13, path![
             (0, 0),
             (1, 0),
             (2, 0), //corner

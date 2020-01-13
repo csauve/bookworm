@@ -1,14 +1,17 @@
-mod coord;
-mod offset;
-mod path;
-mod snake;
-mod turn;
+pub mod coord;
+pub mod offset;
+pub mod path;
+pub mod snake;
+pub mod turn;
+mod util;
 
+use std::collections::HashMap;
 use crate::api::{ApiGameState, ApiDirection};
 use coord::{Coord, Unit};
-use turn::Turn;
+use turn::{Turn, AdvanceResult};
+use util::cartesian_product;
 
-const MAX_LOOKAHEAD_DEPTH: u8 = 10;
+const MAX_LOOKAHEAD_DEPTH: u8 = 3;
 
 type Score = f32;
 
@@ -38,12 +41,8 @@ impl Game {
     }
 
     pub fn get_decision(&self) -> ApiDirection {
-        *Game::evaluate_turn(&self.root_turn, MAX_LOOKAHEAD_DEPTH)
-            .iter()
-            .max_by(|(_, scoreA), (_, scoreB)| scoreA.partial_cmp(scoreB).unwrap())
-            .map(|(dir, _)| dir)
-            //if we can't find a move, just pick default and pray to snake jesusSsSSss
-            .unwrap_or(&self.root_turn.you().get_default_move())
+        let (dir, _score) = Game::evaluate_turn(&self.root_turn, self.bound, MAX_LOOKAHEAD_DEPTH);
+        dir
     }
 
     //The space of next turns is basically the cartesian product of the sets of each snake's
@@ -56,9 +55,39 @@ impl Game {
     //We should instead guide longer-term planning and strategy with heuristics, and consider
     //the turn tree to be like "guard rails" that prevent poor decisions in the short term like
     //local maxima in the heuristic.
-    fn evaluate_turn(turn: &Turn, max_depth: u8) -> Vec<(ApiDirection, Score)> {
+    fn evaluate_turn(turn: &Turn, bound: Coord, max_depth: u8) -> (ApiDirection, Score) {
+        if max_depth == 0 {
+            //todo: use a heuristic
+            return (ApiDirection::Up, 1.0);
+        }
 
+        //todo: reduce number of moves to help prune turn tree
+        let legal_moves = turn.get_legal_moves(bound);
+        let mut by_you_move: HashMap<ApiDirection, Vec<Score>> = HashMap::new();
 
+        for moves in cartesian_product(&legal_moves).iter() {
+            let mut future_turn = turn.clone();
+            let you_move = moves[0];
+            let score = match future_turn.advance(moves, bound) {
+                AdvanceResult::YouLive => {
+                    //todo: decide to use a heuristic instead, given some condition
+                    let (_, score) = Game::evaluate_turn(&future_turn, bound, max_depth - 1);
+                    score
+                },
+                AdvanceResult::YouDie => 0.0,
+            };
+            if let Some(values) = by_you_move.get_mut(&you_move) {
+                values.push(score);
+            } else {
+                by_you_move.insert(you_move.clone(), vec![score]);
+            }
+        }
+
+        by_you_move.iter()
+            .map(|(dir, scores)| (*dir, scores.iter().sum::<Score>() / scores.len() as f32))
+            .max_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap())
+            //if we can't find a move, just pick default and pray to snake jesusSsSSss
+            .unwrap_or_else(|| (turn.you().get_default_move(), 1.0))
     }
 
     pub fn width(&self) -> Unit {
@@ -103,28 +132,27 @@ mod tests {
         assert_eq!(turn.you().tail(), Coord::new(2, 2));
     }
 
-    // #[test]
+    #[test]
     fn test_facing_wall() {
         let result = decide!("
         |  |  |  |
         |Y0|Y1|  |
         |  |  |  |
         ");
-        assert_ne!(result, Some(Left)); //would hit wall
-        assert_ne!(result, Some(Right)); //would hit self
+        assert_ne!(result, Left); //would hit wall
+        assert_ne!(result, Right); //would hit self
 
-        assert_eq!(Some(Down), decide!("
+        assert_eq!(Down, decide!("
         |Y0|Y1|  |
         |  |  |  |
         |  |  |  |
         "));
-
     }
 
-    // #[test]
+    #[test]
     fn test_facing_self() {
         //could also go right to avoid tail, but would be trapped
-        assert_eq!(Some(Left), decide!("
+        assert_eq!(Left, decide!("
         |  |  |  |  |  |
         |Y8|Y7|Y6|Y5|  |
         |  |Y0|  |Y4|  |
@@ -133,10 +161,10 @@ mod tests {
         "));
     }
 
-    // #[test]
+    //#[test]
     fn test_facing_other() {
         //should avoid being trapped between self and other snake
-        assert_eq!(Some(Left), decide!("
+        assert_eq!(Left, decide!("
         |A3|  |  |  |  |
         |A2|A1|A0|Y5|Y6|
         |  |Y0|  |Y4|  |
@@ -144,34 +172,35 @@ mod tests {
         |  |  |  |  |  |
         "));
 
+        //todo: this is failing
         //will be trapped, but there is nowhere else to go
-        assert_eq!(Some(Right), decide!("
+        assert_eq!(Right, decide!("
         |A2|  |Y6|  |
         |A1|A0|Y5|  |
         |Y0|  |Y4|  |
         |Y1|Y2|Y3|  |
         "));
 
-        //the only winning move is not to play...
-        assert_eq!(None, decide!("
+        //don't really care which way it goes, just that it doesn't panic
+        decide!("
         |  |  |A0|A1|
         |  |Y1|Y0|A2|
         |  |A5|A4|A3|
         |  |  |  |  |
-        "));
+        ");
     }
 
     // #[test]
     fn test_lookahead() {
         //looks like trapped, but actually next turn A's tail will move (assuming not stacked)
-        assert_eq!(Some(Right), decide!("
+        assert_eq!(Right, decide!("
         |  |A1|A2|A3|
         |  |A0|Y0|A4|
         |  |  |Y1|  |
         "));
 
         //going Up has more space now but is a dead end, while B's tail will move and open up space
-        assert_eq!(Some(Right), decide!("
+        assert_eq!(Right, decide!("
         |B0|  |  |  |  |  |  |
         |B1|B2|B3|B4|B5|  |  |
         |  |  |  |  |B6|B7|  |

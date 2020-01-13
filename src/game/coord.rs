@@ -106,6 +106,7 @@ impl SubAssign<Offset> for Coord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::api::ApiDirection;
 
     #[test]
     fn test_coord_and_offset() {
@@ -130,6 +131,13 @@ mod tests {
         let c = a + ab;
         assert_eq!(c.x, 10);
         assert_eq!(c.y, 0);
+    }
+
+    #[test]
+    fn test_dir_into_offset() {
+        let mut a = Coord {x: 1, y: 1};
+        a += ApiDirection::Down.into();
+        assert_eq!(a, Coord {x: 1, y: 2});
     }
 
     #[test]
