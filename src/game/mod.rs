@@ -11,7 +11,7 @@ use coord::{Coord, Unit};
 use turn::{Turn, AdvanceResult};
 use util::cartesian_product;
 
-const MAX_LOOKAHEAD_DEPTH: u8 = 3;
+const MAX_LOOKAHEAD_DEPTH: u8 = 4;
 
 type Score = f32;
 
@@ -234,6 +234,57 @@ mod tests {
         |A4 |A5 |A0 |Y1 |B10|B9 |   |
         |A7 |A6 |   |Y2 |B11|   |   |
         |A8 |A9 |   |Y3 |B12|   |   |
+        "));
+    }
+
+    #[test]
+    fn test_uncertain_future() {
+        //The A snake could easily trap us, so there should be some uncertainty in the score
+        //todo: check score range
+        assert_eq!(Up, decide!("
+        |  |  |  |  |  |
+        |  |A0|  |  |  |
+        |  |A1|  |  |  |
+        |Y0|A2|  |  |  |
+        |Y1|A3|A4|  |  |
+        |Y2|Y3|Y4|  |  |
+        "));
+    }
+
+    #[test]
+    fn test_trap_enemy() {
+        //we have the opportunity to trap the enemy snake and keep
+        assert_eq!(Left, decide!("
+        |  |  |  |  |  |
+        |  |Y0|  |  |  |
+        |  |Y1|  |  |  |
+        |A0|Y2|  |  |  |
+        |A1|Y3|Y4|  |  |
+        |A2|A3|A4|  |  |
+        "));
+    }
+
+    #[test]
+    fn test_enemy_already_trapped() {
+        //enemy is already trapped; don't get trapped ourselves
+        assert_eq!(Right, decide!("
+        |  |Y0|  |  |  |
+        |  |Y1|  |  |  |
+        |A0|Y2|  |  |  |
+        |A1|Y3|Y4|  |  |
+        |A2|A3|A4|  |  |
+        "));
+    }
+
+    #[test]
+    fn test_head_to_head_kill() {
+        //we have the opportunity to kill this enemy in a head-to-head collision
+        assert_eq!(Left, decide!("
+        |  |  |  |  |  |
+        |  |Y0|  |  |  |
+        |A0|Y1|  |  |  |
+        |A1|Y2|Y3|Y4|  |
+        |A2|  |  |  |  |
         "));
     }
 }
