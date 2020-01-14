@@ -68,8 +68,10 @@ impl Snake {
         self.health == 0
     }
 
-    pub fn hit_body_of(&self, other: &Snake) -> bool {
-        other.body.contains_node(self.head()) && other.head() != self.head()
+    pub fn hit_trailing_body_of(&self, other: &Snake) -> bool {
+        other.body.nodes.iter().skip(1).any(|&node| {
+            node == self.head()
+        })
     }
 
     pub fn loses_head_to_head(&self, other: &Snake) -> bool {
@@ -187,7 +189,7 @@ mod tests {
         assert!(little_snake.loses_head_to_head(&little_snake));
         assert!(big_snake.loses_head_to_head(&big_snake));
 
-        assert!(!little_snake.hit_body_of(&big_snake));
-        assert!(!big_snake.hit_body_of(&little_snake));
+        assert!(!little_snake.hit_trailing_body_of(&big_snake));
+        assert!(!big_snake.hit_trailing_body_of(&little_snake));
     }
 }

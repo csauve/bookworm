@@ -74,7 +74,9 @@ impl Game {
                     let (_, score) = Game::evaluate_turn(&future_turn, bound, max_depth - 1);
                     score
                 },
-                AdvanceResult::YouDie => 0.0,
+                AdvanceResult::YouDie => {
+                    0.0
+                },
             };
             if let Some(values) = by_you_move.get_mut(&you_move) {
                 values.push(score);
@@ -83,8 +85,15 @@ impl Game {
             }
         }
 
-        by_you_move.iter()
+        let average_scores = by_you_move.iter()
             .map(|(dir, scores)| (*dir, scores.iter().sum::<Score>() / scores.len() as f32))
+            .collect::<Vec<_>>();
+
+        if max_depth == MAX_LOOKAHEAD_DEPTH {
+            dbg!(&average_scores);
+        }
+
+        average_scores.iter().cloned()
             .max_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap())
             //if we can't find a move, just pick default and pray to snake jesusSsSSss
             .unwrap_or_else(|| (turn.you().get_default_move(), 1.0))
@@ -161,7 +170,7 @@ mod tests {
         "));
     }
 
-    //#[test]
+    #[test]
     fn test_facing_other() {
         //should avoid being trapped between self and other snake
         assert_eq!(Left, decide!("
@@ -190,15 +199,18 @@ mod tests {
         ");
     }
 
-    // #[test]
-    fn test_lookahead() {
+    #[test]
+    fn test_lookahead_basic() {
         //looks like trapped, but actually next turn A's tail will move (assuming not stacked)
         assert_eq!(Right, decide!("
         |  |A1|A2|A3|
         |  |A0|Y0|A4|
         |  |  |Y1|  |
         "));
+    }
 
+    #[test]
+    fn test_lookahead_avoid_dead_end() {
         //going Up has more space now but is a dead end, while B's tail will move and open up space
         assert_eq!(Right, decide!("
         |B0|  |  |  |  |  |  |
@@ -206,8 +218,22 @@ mod tests {
         |  |  |  |  |B6|B7|  |
         |A3|A2|A1|Y0|  |B8|  |
         |A4|A5|A0|Y1|C4|C3|  |
-        |A7|A6|  |Y1|  |C2|  |
-        |A8|A9|  |Y1|C0|C1|  |
+        |A7|A6|  |Y2|  |C2|  |
+        |A8|A9|  |Y3|C0|C1|  |
+        "));
+    }
+
+    #[test]
+    fn test_lookahead_best_dead_end() {
+        //both options are a dead end, but going Up has more turns left (hope a snake dies and frees us)
+        assert_eq!(Up, decide!("
+        |B0 |   |   |   |   |   |   |
+        |B1 |B2 |B3 |B4 |B5 |   |   |
+        |   |   |   |   |B6 |B7 |   |
+        |A3 |A2 |A1 |Y0 |   |B8 |   |
+        |A4 |A5 |A0 |Y1 |B10|B9 |   |
+        |A7 |A6 |   |Y2 |B11|   |   |
+        |A8 |A9 |   |Y3 |B12|   |   |
         "));
     }
 }

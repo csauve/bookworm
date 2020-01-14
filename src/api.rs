@@ -16,7 +16,7 @@ pub struct ApiGame {
     pub id: ApiGameId,
 }
 
-#[derive(Deserialize, Copy, Clone, PartialEq)]
+#[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
 pub struct ApiCoords {
     pub x: u32,
     pub y: u32,
@@ -65,6 +65,7 @@ pub struct ApiMove {
 pub mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::cmp::max;
 
     impl ApiGameState {
 
@@ -93,14 +94,14 @@ pub mod tests {
                             let snake_name: String = content.chars().take_while(|&c| c.is_alphabetic()).collect();
                             let index: usize = content.chars().skip_while(|&c| c.is_alphabetic()).collect::<String>().parse().unwrap();
                             if snake_name == "Y" {
-                                you_coords.resize(index + 1, coord);
+                                you_coords.resize(max(you_coords.len(), index + 1), coord);
                                 you_coords[index] = coord;
                             } else if let Some(body) = snakes_coords.get_mut(&snake_name) {
-                                body.resize(index + 1, coord);
+                                body.resize(max(body.len(), index + 1), coord);
                                 body[index] = coord;
                             } else {
                                 let mut body = Vec::new();
-                                body.resize(index + 1, coord);
+                                body.resize(max(body.len(), index + 1), coord);
                                 body[index] = coord;
                                 snakes_coords.insert(snake_name, body);
                             }
@@ -131,5 +132,18 @@ pub mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_parse_basic() {
+        let game = ApiGameState::parse_basic("
+        |  |  |  |  |  |
+        |Y8|Y7|Y6|Y5|  |
+        |  |Y0|  |Y4|  |
+        |  |Y1|Y2|Y3|  |
+        |  |  |  |  |  |
+        ");
+
+        assert_eq!(game.you.body.len(), 9);
     }
 }

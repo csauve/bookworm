@@ -71,7 +71,7 @@ impl Turn {
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
                 //short circuit on body hits since probably more likely than head-to-head?
-                if snake.hit_body_of(other_snake) || other_snake_index != snake_index && snake.loses_head_to_head(other_snake) {
+                if snake.hit_trailing_body_of(other_snake) || other_snake_index != snake_index && snake.loses_head_to_head(other_snake) {
                     //TWO SNAKES ENTER, ONE SNAKE LEAVES
                     return Some(snake_index);
                 }
@@ -143,7 +143,7 @@ mod tests {
     }
 
     #[test]
-    fn advance() {
+    fn test_advance() {
         let (prev, next, result) = advance!(&[Up, Left], "
         |  |()|  |
         |  |  |Y0|
@@ -163,5 +163,19 @@ mod tests {
         assert!(next.enemies().is_empty());
         //moved Y snake according to intended direction
         assert_eq!(next.you().head(), Coord::new(2, 0));
+    }
+
+    #[test]
+    fn test_you_die() {
+        let (prev, next, result) = advance!(&[Up], "
+        |  |  |  |  |  |
+        |Y8|Y7|Y6|Y5|  |
+        |  |Y0|  |Y4|  |
+        |  |Y1|Y2|Y3|  |
+        |  |  |  |  |  |
+        ");
+        assert_eq!(prev.you().size(), 9);
+        assert_eq!(next.you().size(), 9);
+        assert_eq!(result, YouDie);
     }
 }

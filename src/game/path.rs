@@ -7,7 +7,7 @@ use super::offset::{Offset};
 // the path between them is an undefined shortest manhattan path.
 #[derive(Clone, PartialEq, Debug)]
 pub struct Path {
-    nodes: Vec<Coord>,
+    pub nodes: Vec<Coord>,
 }
 
 impl Path {
