@@ -11,7 +11,7 @@ use coord::{Coord, Unit};
 use turn::{Turn, AdvanceResult};
 use util::cartesian_product;
 
-const MAX_LOOKAHEAD_DEPTH: u8 = 4;
+const MAX_LOOKAHEAD_DEPTH: u8 = 3;
 
 type Score = f32;
 
@@ -58,7 +58,7 @@ impl Game {
     fn evaluate_turn(turn: &Turn, bound: Coord, max_depth: u8) -> (ApiDirection, Score) {
         if max_depth == 0 {
             //todo: use a heuristic
-            return (ApiDirection::Up, 1.0);
+            return (ApiDirection::Up, 1.0 / turn.snakes.len() as Score);
         }
 
         //todo: reduce number of moves to help prune turn tree
@@ -86,7 +86,7 @@ impl Game {
         }
 
         let average_scores = by_you_move.iter()
-            .map(|(dir, scores)| (*dir, scores.iter().sum::<Score>() / scores.len() as f32))
+            .map(|(dir, scores)| (*dir, scores.iter().sum::<Score>() / scores.len() as Score))
             .collect::<Vec<_>>();
 
         if max_depth == MAX_LOOKAHEAD_DEPTH {
@@ -96,7 +96,7 @@ impl Game {
         average_scores.iter().cloned()
             .max_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap())
             //if we can't find a move, just pick default and pray to snake jesusSsSSss
-            .unwrap_or_else(|| (turn.you().get_default_move(), 1.0))
+            .unwrap_or_else(|| (turn.you().get_default_move(), 0.0))
     }
 
     pub fn width(&self) -> Unit {
@@ -279,12 +279,13 @@ mod tests {
     #[test]
     fn test_head_to_head_kill() {
         //we have the opportunity to kill this enemy in a head-to-head collision
-        assert_eq!(Left, decide!("
-        |  |  |  |  |  |
-        |  |Y0|  |  |  |
-        |A0|Y1|  |  |  |
-        |A1|Y2|Y3|Y4|  |
-        |A2|  |  |  |  |
+        assert_eq!(Up, decide!("
+        |  |C0|A1|B0|  |
+        |C2|C1|A0|B1|B2|
+        |C3|  |  |  |B3|
+        |  |  |Y0|  |  |
+        |  |  |Y1|  |  |
+        |  |  |Y2|  |  |
         "));
     }
 }
