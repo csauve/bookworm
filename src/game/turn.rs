@@ -31,14 +31,6 @@ impl Turn {
         }
     }
 
-    pub fn update(&mut self, game_state: &ApiGameState) {
-        self.snakes = once(&game_state.you)
-            .chain(game_state.board.snakes.iter())
-            .map(|s| Snake::from_api(s).unwrap())
-            .collect();
-        self.food = game_state.board.food.iter().map(Coord::from).collect();
-    }
-
     pub fn get_legal_moves(&self, bound: Coord) -> Vec<Vec<ApiDirection>> {
         self.snakes.iter().map(|snake| {
             snake.get_legal_moves().iter().cloned()
@@ -140,6 +132,24 @@ mod tests {
                 (prev, next, result)
             }
         );
+    }
+
+    #[test]
+    fn test_init() {
+        let api_game = ApiGameState::parse_basic("
+        |  |()|  |
+        |  |  |Y0|
+        |A0|A1|Y1|
+        |  |A2|  |
+        |  |  |  |
+        ");
+
+        let turn = Turn::init(&api_game);
+        assert_eq!(turn.food, vec![Coord::new(1, 0)]);
+        assert_eq!(turn.enemies()[0].head(), Coord::new(0, 2));
+        assert_eq!(turn.enemies()[0].tail(), Coord::new(1, 3));
+        assert_eq!(turn.you().head(), Coord::new(2, 1));
+        assert_eq!(turn.you().tail(), Coord::new(2, 2));
     }
 
     #[test]

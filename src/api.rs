@@ -58,7 +58,7 @@ pub enum ApiDirection {
 #[derive(Serialize)]
 pub struct ApiMove {
     #[serde(rename = "move")]
-    pub move_dir: ApiDirection,
+    pub decision: ApiDirection,
 }
 
 #[cfg(test)]

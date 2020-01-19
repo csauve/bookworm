@@ -30,8 +30,8 @@ fn main() {
     match matches.subcommand() {
         ("server", Some(args)) => {
             server::start_server(
-                args.value_of("ip").unwrap(),
-                args.value_of("port").unwrap()
+                args.value_of("ip").unwrap().parse().expect("IP must be an IPV6 or IPV4 format"),
+                args.value_of("port").unwrap().parse().expect("Port must be numeric")
             );
         },
         ("benchmark", _) => {

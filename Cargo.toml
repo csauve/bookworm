@@ -5,6 +5,8 @@ authors = ["csauve <csauve@t3hz0r.com>"]
 edition = "2018"
 
 [dependencies]
-actix-web = "1.0"
+serde_json = "1.0"
+hyper = "0.13"
+tokio = { version = "0.2", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 clap = "2.33.0"

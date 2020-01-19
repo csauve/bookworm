@@ -1,83 +1,81 @@
-use std::collections::HashMap;
-use std::sync::Mutex;
-use actix_web::{web, get, post, App, HttpServer, Responder};
-use crate::api::{ApiSnakeConfig, ApiGameState, ApiMove, ApiGameId};
-use crate::game::Game;
+use std::convert::Infallible;
+use std::net::{SocketAddr, IpAddr};
+use hyper::{Body, Request, Response, Server, Method, StatusCode, body, service::{make_service_fn, service_fn}};
+use crate::api::{ApiSnakeConfig, ApiMove};
+use crate::game::get_decision;
 
-struct AppState {
-    snake_config: ApiSnakeConfig,
-    games: Mutex<HashMap<ApiGameId, Game>>,
-}
+#[tokio::main]
+pub async fn start_server(ip: IpAddr, port: u16) {
+    let addr = SocketAddr::new(ip, port);
+    println!("
+    ┌────────────────────────────────┐
+    │ ╖                              │
+    │ ╟─╥ ╓─╖ ╓─╖ ║╓  ╖ ╓ ╓─╖ ╓┐ ╓┬╖ │ v{}
+    │ ╜─╜ ╙─╜ ╙─╜ ╜╙─ ╙┴╜ ╙─╜ ╨  ╨ ╨ │ {}
+    └────────────────────────────────┘
+    ",
+    env!("CARGO_PKG_VERSION"),
+    &addr
+    );
 
-#[get("/")]
-fn handle_index(app_state: web::Data<AppState>) -> impl Responder {
-    web::Json(app_state.snake_config.clone())
-}
-
-//we have 5s to respond
-#[post("/start")]
-fn handle_start(app_state: web::Data<AppState>, game_state: web::Json<ApiGameState>) -> impl Responder {
-    let games = &mut *app_state.games.lock().unwrap();
-    games.insert(game_state.game.id.clone(), Game::init(&game_state));
-    //todo: start a thread working on predictions
-    web::Json(app_state.snake_config.clone())
-}
-
-//we have 500ms to respond
-#[post("/move")]
-fn handle_move(app_state: web::Data<AppState>, game_state: web::Json<ApiGameState>) -> impl Responder {
-    let games = &mut *app_state.games.lock().unwrap();
-    let direction = match games.get_mut(&game_state.game.id) {
-        Some(game) => {
-            game.update(&game_state);
-            game.get_decision()
-        },
-        None => {
-            //maybe we missed the "/start" call?
-            let game = Game::init(&game_state);
-            let decision = game.get_decision();
-            games.insert(game_state.game.id.clone(), game);
-            decision
+    let server = Server::bind(&addr).serve(make_service_fn(|_socket|
+        async {
+            Ok::<_, Infallible>(service_fn(move |req: Request<Body>|
+                async {
+                    Ok::<_, Infallible>(match (req.method(), req.uri().path()) {
+                        (&Method::GET, "/") => {
+                            Response::new(Body::from("What'sssss up?"))
+                        },
+                        (&Method::POST, "/ping") => {
+                            Response::new(Body::empty())
+                        },
+                        (&Method::POST, "/start") => {
+                            let json = serde_json::to_string(&ApiSnakeConfig {
+                                color: String::from("#800080"),
+                                head_type: String::from("fang"),
+                                tail_type: String::from("round-bum"),
+                            }).unwrap();
+                            Response::builder()
+                                .header("Content-Type", "application/json")
+                                .body(Body::from(json))
+                                .unwrap()
+                        },
+                        (&Method::POST, "/move") => {
+                            let bytes = body::to_bytes(req.into_body()).await.unwrap();
+                            match serde_json::from_slice(&bytes) {
+                                Ok(game_state) => {
+                                    let decision = get_decision(&game_state);
+                                    let json = serde_json::to_string(&ApiMove {decision}).unwrap();
+                                    Response::builder()
+                                        .header("Content-Type", "application/json")
+                                        .body(Body::from(json))
+                                        .unwrap()
+                                },
+                                Err(_) => {
+                                    Response::builder()
+                                        .status(StatusCode::BAD_REQUEST)
+                                        .header("Content-Type", "text/plain")
+                                        .body(Body::from("The request body could not be parsed as valid JSON"))
+                                        .unwrap()
+                                }
+                            }
+                        },
+                        (&Method::POST, "/end") => {
+                            Response::new(Body::empty())
+                        },
+                        _ => {
+                            Response::builder()
+                                .status(StatusCode::NOT_FOUND)
+                                .body(Body::empty())
+                                .unwrap()
+                        }
+                    })
+                }
+            ))
         }
-    };
-    web::Json(ApiMove {move_dir: direction})
-}
+    ));
 
-#[post("/end")]
-fn handle_end(app_state: web::Data<AppState>, game_state: web::Json<ApiGameState>) -> impl Responder {
-    let games = &mut *app_state.games.lock().unwrap();
-    games.remove(&game_state.game.id);
-    "cya"
-}
-
-#[post("/ping")]
-fn handle_ping() -> impl Responder {
-    "pong"
-}
-
-pub fn start_server(ip: &str, port: &str) {
-    let bind_to = format!("{}:{}", ip, port);
-
-    let app_state = web::Data::new(AppState {
-        games: Mutex::new(HashMap::new()),
-        snake_config: ApiSnakeConfig {
-            color: String::from("#800080"),
-            head_type: String::from("fang"),
-            tail_type: String::from("round-bum"),
-        },
-    });
-
-    HttpServer::new(move || {
-        App::new()
-            .register_data(app_state.clone())
-            .service(handle_index)
-            .service(handle_start)
-            .service(handle_move)
-            .service(handle_end)
-            .service(handle_ping)
-    })
-    .bind(bind_to.clone())
-    .unwrap_or_else(|_| panic!("Failed to bind to {}", bind_to))
-    .run()
-    .unwrap();
+    if let Err(e) = server.await {
+        eprintln!("Server error: {}", e);
+    }
 }
