@@ -6,44 +6,62 @@ pub mod turn;
 mod util;
 
 use std::collections::HashMap;
+// use std::sync::Mutex;
+// use rayon::prelude::*;
+use log::*;
 use crate::api::{ApiGameState, ApiDirection};
-use coord::{Coord, Unit};
-use turn::{Turn, AdvanceResult};
+use turn::{Turn, AdvanceResult, Territory};
+use std::cmp::{max, min};
 use util::cartesian_product;
 
-const MAX_LOOKAHEAD_DEPTH: u8 = 3;
+const MAX_LOOKAHEAD_DEPTH: u8 = 1;
 
 type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
-    let bound = Coord::new(
-        game_state.board.width as Unit - 1,
-        game_state.board.height as Unit - 1
-    );
     let root_turn = Turn::init(game_state);
 
-    let (dir, _score) = evaluate_turn(&root_turn, bound, MAX_LOOKAHEAD_DEPTH);
+    let (dir, _score) = evaluate_turn(&root_turn, MAX_LOOKAHEAD_DEPTH);
     dir
 }
 
-fn evaluate_turn(turn: &Turn, bound: Coord, max_depth: u8) -> (ApiDirection, Score) {
+//should return a value 0-1 representing surviveability of the snake
+fn heuristic(snake_index: usize, turn: &Turn, territories: &[Territory]) -> Option<Score> {
+    turn.snakes.get(snake_index).map(|snake| {
+        let territory = territories.get(snake_index).unwrap();
+        //todo: tune heuristics (e.g. prevent from being too big)
+        let h_control = territory.area as Score / turn.area() as Score;
+        let h_food = snake.health as Score / 100.0;
+        let h_head_to_head = turn.snakes.iter().enumerate()
+            .filter(|(other_index, other)| *other_index == snake_index || snake.size() > other.size())
+            .count() as Score /
+            turn.snakes.len() as Score;
+        h_food * h_head_to_head * h_control
+    })
+}
 
+fn evaluate_turn(turn: &Turn, max_depth: u8) -> (ApiDirection, Score) {
+    debug!("Evaluating turn at max_depth {}", max_depth);
+
+    let territories = turn.get_territories();
+
+    //todo: are there other conditions we can bail out on?
     if max_depth == 0 {
-        //todo: use a heuristic
-        return (ApiDirection::Up, 1.0 / turn.snakes.len() as Score);
+        return (ApiDirection::Up, heuristic(0, turn, &territories).unwrap());
     }
 
-    //todo: reduce number of moves to help prune turn tree
-    let legal_moves = turn.get_legal_moves(bound);
+    //todo: add mid-term planning with "plays"; use `territories`
+
+    //todo: prune enemy moves which don't affect us; and by max enemy scores
+    let legal_moves = turn.get_free_snake_moves();
     let mut by_you_move: HashMap<ApiDirection, Vec<Score>> = HashMap::new();
 
     for moves in cartesian_product(&legal_moves).iter() {
         let mut future_turn = turn.clone();
         let you_move = moves[0];
-        let score = match future_turn.advance(moves, bound) {
+        let score = match future_turn.advance(moves) {
             AdvanceResult::YouLive => {
-                //todo: decide to use a heuristic instead, given some condition
-                let (_, score) = evaluate_turn(&future_turn, bound, max_depth - 1);
+                let (_, score) = evaluate_turn(&future_turn, max_depth - 1);
                 score
             },
             AdvanceResult::YouDie => {

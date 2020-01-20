@@ -103,14 +103,6 @@ impl Path {
     pub fn contains_node(&self, coord: Coord) -> bool {
         self.nodes.contains(&coord)
     }
-
-    pub fn start_self_intersects(&self) -> bool {
-        if let Some(start) = self.nodes.first() {
-            self.nodes.windows(2).skip(1).any(|pair| {start.bounded_by(pair[0], pair[1])})
-        } else {
-            false
-        }
-    }
 }
 
 #[macro_export]

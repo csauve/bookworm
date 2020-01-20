@@ -6,10 +6,9 @@ use std::convert::From;
 
 //should change these if board will be bigger
 pub type Unit = i8;
-pub type UnitAbs = u8;
+pub type UnitAbs = usize;
 
-//todo: benchmark u8 vs i16
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Coord {
     pub x: Unit,
     pub y: Unit,

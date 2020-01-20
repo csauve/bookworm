@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 use crate::api::{ApiSnake, ApiDirection};
-use crate::api::ApiDirection::{Up, Left, Right, Down};
 use super::path::Path;
 use super::coord::Coord;
 use super::offset::ZERO as ZERO_OFFSET;
@@ -32,21 +31,7 @@ impl Snake {
                 return dir;
             }
         }
-        Up
-    }
-
-    pub fn get_legal_moves(&self) -> &'static[ApiDirection] {
-        if let Some(neck) = self.neck() {
-            if let Ok(dir) = ApiDirection::try_from(self.head() - neck) {
-                return match dir {
-                    Up => &[Left, Up, Right],
-                    Left => &[Down, Left, Up],
-                    Right => &[Up, Right, Down],
-                    Down => &[Right, Down, Left],
-                }
-            }
-        }
-        &[Left, Right, Up, Down]
+        ApiDirection::Up
     }
 
     //returns location of the snake's head, where movements are made from
@@ -68,14 +53,8 @@ impl Snake {
         self.health == 0
     }
 
-    pub fn hit_trailing_body_of(&self, other: &Snake) -> bool {
-        other.body.nodes.iter().skip(1).any(|&node| {
-            node == self.head()
-        })
-    }
-
-    pub fn loses_head_to_head(&self, other: &Snake) -> bool {
-        self.head() == other.head() && self.size() <= other.size()
+    pub fn find_first_node(&self, loc: Coord) -> Option<usize> {
+        self.body.nodes.iter().position(|node| loc == *node)
     }
 
     pub fn feed(&mut self, new_health: Health) {
@@ -138,7 +117,7 @@ mod tests {
         assert_eq!(snake.head(), Coord::new(1, 0));
         assert_eq!(snake.neck().unwrap(), Coord::new(2, 0));
         assert_eq!(snake.tail(), Coord::new(2, 1));
-        assert_eq!(snake.get_default_move(), Left);
+        assert_eq!(snake.get_default_move(), ApiDirection::Left);
 
         //unusual case, but should still work...
         let snake = Snake::from_api(&ApiSnake {
@@ -153,43 +132,6 @@ mod tests {
         assert_eq!(snake.head(), Coord::new(1, 0));
         assert!(snake.neck().is_none());
         assert_eq!(snake.head(), Coord::new(1, 0));
-        assert_eq!(snake.get_default_move(), Up);
-    }
-
-    #[test]
-    fn test_snake_head_to_head() {
-        let little_snake = Snake::from_api(&ApiSnake {
-            id: String::from("1"),
-            name: String::from("little_snake"),
-            health: 80,
-            body: vec![
-                ApiCoords {x: 0, y: 0},
-                ApiCoords {x: 0, y: 1},
-            ],
-        }).unwrap();
-
-        let big_snake = Snake::from_api(&ApiSnake {
-            id: String::from("2"),
-            name: String::from("big_snake"),
-            health: 80,
-            body: vec![
-                ApiCoords {x: 0, y: 0},
-                ApiCoords {x: 1, y: 0},
-                ApiCoords {x: 2, y: 0},
-                ApiCoords {x: 3, y: 0},
-            ],
-        }).unwrap();
-
-        //the two snakes are in a head-to-head collision state -- only big snake should survive
-        assert_eq!(big_snake.head(), little_snake.head());
-        assert!(little_snake.loses_head_to_head(&big_snake));
-        assert!(!big_snake.loses_head_to_head(&little_snake));
-
-        //collisions with equally-sized snakes also result in death
-        assert!(little_snake.loses_head_to_head(&little_snake));
-        assert!(big_snake.loses_head_to_head(&big_snake));
-
-        assert!(!little_snake.hit_trailing_body_of(&big_snake));
-        assert!(!big_snake.hit_trailing_body_of(&little_snake));
+        assert_eq!(snake.get_default_move(), ApiDirection::Up);
     }
 }

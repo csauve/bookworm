@@ -3,9 +3,31 @@ mod game;
 mod server;
 mod benchmark;
 
+use log::*;
 use clap::{App, Arg, SubCommand};
+use chrono::{DateTime, Local};
+
+struct Logger;
+impl log::Log for Logger {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        let now: DateTime<Local> = Local::now();
+        println!("{} [{}] {}", now.format("%Y-%m-%d %H:%M:%S%.6f"), record.level(), record.args());
+    }
+
+    fn flush(&self) {}
+}
+
+const LOGGER: Logger = Logger;
 
 fn main() {
+    if set_logger(&LOGGER).is_ok() {
+        log::set_max_level(LevelFilter::Debug)
+    }
+
     let matches = App::new("BookWorm")
         .subcommand(SubCommand::with_name("server")
             .about("Runs the bot in server mode for connecting to a Battlesnake engine.")

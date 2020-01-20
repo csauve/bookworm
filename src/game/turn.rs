@@ -1,12 +1,14 @@
 use std::iter::once;
 use std::convert::TryFrom;
-use std::collections::HashSet;
+use std::collections::{HashSet, HashMap};
 use crate::api::{ApiGameState, ApiDirection};
 use super::snake::{Snake, Health};
-use super::coord::Coord;
+use super::coord::{Coord, Unit, UnitAbs};
+use super::path::Path;
 
 const SNAKE_MAX_HEALTH: Health = 100;
 const ORIGIN: Coord = Coord {x: 0, y: 0};
+const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
 
 #[derive(PartialEq, Debug)]
 pub enum AdvanceResult {
@@ -18,6 +20,12 @@ pub struct Turn {
     //must contain at least 1 snake (the `you` snake, at index 0)
     pub snakes: Vec<Snake>,
     pub food: Vec<Coord>,
+    bound: Coord,
+}
+
+pub struct Territory {
+    pub area: UnitAbs,
+    pub food: Vec<Path>,
 }
 
 impl Turn {
@@ -28,19 +36,126 @@ impl Turn {
                 .map(|s| Snake::from_api(s).unwrap())
                 .collect(),
             food: game_state.board.food.iter().map(Coord::from).collect(),
+            bound: Coord::new(
+                game_state.board.width as Unit - 1,
+                game_state.board.height as Unit - 1
+            ),
         }
     }
 
-    pub fn get_legal_moves(&self, bound: Coord) -> Vec<Vec<ApiDirection>> {
-        self.snakes.iter().map(|snake| {
-            snake.get_legal_moves().iter().cloned()
-                .filter(|&dir| (snake.head() + dir.into()).bounded_by(ORIGIN, bound))
-                .collect()
+    //gets the set of moves from this point which are not obstructed or out of bounds
+    pub fn get_free_moves(&self, from: Coord, n_turns: usize) -> Vec<ApiDirection> {
+        ALL_DIRS.iter().cloned().filter(|dir| {
+            let new_coord = from + (*dir).into();
+            new_coord.bounded_by(ORIGIN, self.bound) && self.snakes.iter().all(|snake| {
+                //finding the "first" node is key to avoiding moving into stacked tail coords
+                if let Some(i) = snake.find_first_node(new_coord) {
+                    //its safe to move into another snake if that node will be gone in n_turns
+                    return i >= snake.size().saturating_sub(n_turns);
+                }
+                true
+            })
         }).collect()
     }
 
+    //find out where each snake can move to next
+    //todo: write a unit test
+    pub fn get_free_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
+        self.snakes.iter().map(|snake| self.get_free_moves(snake.head(), 1)).collect()
+    }
+
+    //A* pathfinding, taking into account snake tail movements
+    fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
+        let mut frontier: HashSet<Coord> = HashSet::new();
+        let mut breadcrumbs: HashMap<Coord, Coord> = HashMap::new();
+        let mut best_dists: HashMap<Coord, UnitAbs> = HashMap::new();
+        frontier.insert(from);
+        best_dists.insert(from, 0);
+
+        while !frontier.is_empty() {
+            let leader = *frontier.iter().min_by_key(|&coord| {
+                best_dists.get(coord).unwrap() + (to - *coord).manhattan_dist()
+            }).unwrap();
+
+            if leader == to {
+                let mut nodes = Vec::new();
+                nodes.push(leader);
+                while let Some(prev) = breadcrumbs.get(nodes.last().unwrap()) {
+                    nodes.push(*prev);
+                }
+                return Some(Path::from_vec(nodes));
+            }
+
+            frontier.remove(&leader);
+            let leader_dist = *best_dists.get(&leader).unwrap();
+            let free_spaces = self.get_free_moves(leader, leader_dist).iter()
+                .map(|dir| leader + (*dir).into())
+                .collect::<Vec<_>>();
+
+            for free_space in free_spaces {
+                let dist = leader_dist + 1;
+                let best_dist = best_dists.get(&free_space);
+                if best_dist.is_none() || dist < *best_dist.unwrap() {
+                    breadcrumbs.insert(free_space, leader);
+                    best_dists.insert(free_space, dist);
+                    frontier.insert(free_space);
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn get_territories(&self) -> Vec<Territory> {
+        let mut territories = self.snakes.iter().map(|_| {
+            Territory {
+                area: 0,
+                food: Vec::new(),
+            }
+        }).collect::<Vec<_>>();
+
+        //for each coord on the board, find out which snake is closest. in a tie, neither snake receives the coord
+        for x in 0..=self.bound.x {
+            for y in 0..=self.bound.y {
+                let coord = Coord::new(x, y);
+                let mut best_path: Option<Path> = None;
+                let mut best_snake: Option<usize> = None;
+                for (i, snake) in self.snakes.iter().enumerate() {
+                    let snake_head = snake.head();
+
+                    //if the best case path from this snake is still longer than the best, skip pathfinding
+                    if let Some(best) = best_path.as_ref() {
+                        if (coord - snake_head).manhattan_dist() > best.dist() {
+                            continue;
+                        }
+                    }
+
+                    if let Some(path) = self.pathfind(snake_head, coord) {
+                        let path_dist = path.dist();
+                        if best_path.is_none() || path_dist < best_path.as_ref().unwrap().dist() {
+                            best_path = Some(path);
+                            best_snake = Some(i);
+                        } else if path_dist == best_path.as_ref().unwrap().dist() {
+                            best_snake = None;
+                        }
+                    }
+                }
+
+                if let Some(i) = best_snake {
+                    let territory = territories.get_mut(i).unwrap();
+                    territory.area += 1;
+                    if self.find_food(coord).is_some() {
+                        territory.food.push(best_path.unwrap());
+                    }
+                }
+            }
+        }
+
+        territories
+    }
+
     //Applies game rules to the turn in order to predict the result. Note that we can't predict food spawns.
-    pub fn advance(&mut self, snake_moves: &[ApiDirection], bound: Coord) -> AdvanceResult {
+    pub fn advance(&mut self, snake_moves: &[ApiDirection]) -> AdvanceResult {
         let mut eaten_food_indices: HashSet<usize> = HashSet::new();
 
         //move snakes and find eaten food
@@ -58,14 +173,15 @@ impl Turn {
             if snake.starved() {
                 return Some(snake_index);
             }
-            if !snake.head().bounded_by(ORIGIN, bound) {
+            if !snake.head().bounded_by(ORIGIN, self.bound) {
                 return Some(snake_index);
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
-                //short circuit on body hits since probably more likely than head-to-head?
-                if snake.hit_trailing_body_of(other_snake) || other_snake_index != snake_index && snake.loses_head_to_head(other_snake) {
-                    //TWO SNAKES ENTER, ONE SNAKE LEAVES
-                    return Some(snake_index);
+                if let Some(i) = other_snake.find_first_node(snake.head()) {
+                    if i > 0 || (other_snake_index != snake_index && snake.size() <= other_snake.size()) {
+                        //TWO SNAKES ENTER, ONE SNAKE LEAVES (Ok, actually neither may leave)
+                        return Some(snake_index);
+                    }
                 }
             }
             None
@@ -101,6 +217,18 @@ impl Turn {
         }
     }
 
+    pub fn width(&self) -> UnitAbs {
+        (self.bound.x + 1) as UnitAbs
+    }
+
+    pub fn height(&self) -> UnitAbs {
+        (self.bound.y + 1) as UnitAbs
+    }
+
+    pub fn area(&self) -> UnitAbs {
+        self.width() * self.height()
+    }
+
     fn find_food(&self, coord: Coord) -> Option<usize> {
         self.food.iter().position(|&food| food == coord)
     }
@@ -110,25 +238,20 @@ impl Turn {
     }
 }
 
-//todo: write more tests
+//todo: write more tests (head-to-head, head-to-body, pathfinding, territories, ...)
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::api::ApiDirection::*;
-    use super::super::coord::Unit;
     use super::AdvanceResult::*;
 
     macro_rules! advance {
         ($moves:expr, $curr:expr) => (
             {
                 let game_state = ApiGameState::parse_basic($curr);
-                let bound = Coord::new(
-                    game_state.board.width as Unit - 1,
-                    game_state.board.height as Unit - 1
-                );
                 let prev = Turn::init(&game_state);
                 let mut next = prev.clone();
-                let result = next.advance($moves, bound);
+                let result = next.advance($moves);
                 (prev, next, result)
             }
         );
