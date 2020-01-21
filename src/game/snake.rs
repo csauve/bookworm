@@ -35,6 +35,7 @@ impl Snake {
     }
 
     //returns location of the snake's head, where movements are made from
+    #[inline]
     pub fn head(&self) -> Coord {
         self.body.start().unwrap()
     }

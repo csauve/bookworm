@@ -8,11 +8,14 @@ mod util;
 use std::collections::HashMap;
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
+use coord::UnitAbs;
 use turn::{Turn, AdvanceResult, Territory};
 use std::cmp::{max, min};
 use util::cartesian_product;
 
 const MAX_LOOKAHEAD_DEPTH: u8 = 1;
+const FORCE_EXPLORE_DIST: UnitAbs = 3;
+const FORCE_EXPLORE_SNAKES: UnitAbs = 2;
 
 type Score = f32;
 
@@ -38,8 +41,31 @@ fn heuristic(snake_index: usize, turn: &Turn, territories: &[Territory]) -> Opti
     })
 }
 
+fn evaluate_turn_b(turn: &Turn, max_depth: u8) -> ApiDirection {
+    let territories = turn.get_territories();
+
+    //determine which moves of each snake we want to explore
+    let moves = turn.get_free_snake_moves().iter().cloned().enumerate()
+        .map(|(i, moves)| {
+            let explore_all = i == 0 ||
+                turn.snakes.len() <= FORCE_EXPLORE_SNAKES ||
+                (turn.snakes[i].head() - turn.you().head()).manhattan_dist() <= FORCE_EXPLORE_DIST;
+            if explore_all {
+                return moves;
+            }
+            moves.iter().cloned().filter(|&dir| {
+                //for snakes that dont matter so much, let's just assume they make a move that's best for them heuristically
+                let score = heuristic(i, turn, &territories).unwrap_or(0.0);
+                true
+            }).collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+
+    ApiDirection::Up
+}
+
 fn evaluate_turn(turn: &Turn, max_depth: u8) -> (ApiDirection, Score) {
-    debug!("Evaluating turn at max_depth {}", max_depth);
+    // debug!("Evaluating turn at max_depth {}", max_depth);
 
     let territories = turn.get_territories();
 

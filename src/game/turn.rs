@@ -124,13 +124,21 @@ impl Turn {
             let coord = Coord::new(coord[0], coord[1]);
             let mut best_path: Option<Path> = None;
             let mut best_snake: Option<usize> = None;
-            for (i, snake) in self.snakes.iter().enumerate() {
+
+            //sort snakes by their best case distances -- it's likely we can skip checking most of them
+            let mut sorted_snakes = self.snakes.iter()
+                .enumerate()
+                .map(|(i, snake)| (i, snake.clone())) //make sure to include original index before sorting
+                .collect::<Vec<_>>();
+            sorted_snakes.sort_unstable_by_key(|(_, snake)| (coord - snake.head()).manhattan_dist());
+
+            for (i, snake) in sorted_snakes.iter() {
                 let snake_head = snake.head();
 
-                //if the best case path from this snake is still longer than the best, skip pathfinding
+                //because snakes are sorted by best case distance, can finish early if we can't do any better
                 if let Some(best) = best_path.as_ref() {
                     if (coord - snake_head).manhattan_dist() > best.dist() {
-                        continue;
+                        break;
                     }
                 }
 
@@ -138,7 +146,7 @@ impl Turn {
                     let path_dist = path.dist();
                     if best_path.is_none() || path_dist < best_path.as_ref().unwrap().dist() {
                         best_path = Some(path);
-                        best_snake = Some(i);
+                        best_snake = Some(*i);
                     } else if path_dist == best_path.as_ref().unwrap().dist() {
                         best_snake = None;
                     }
