@@ -6,8 +6,6 @@ pub mod turn;
 mod util;
 
 use std::collections::HashMap;
-// use std::sync::Mutex;
-// use rayon::prelude::*;
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
 use turn::{Turn, AdvanceResult, Territory};

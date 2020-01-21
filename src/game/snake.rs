@@ -49,6 +49,7 @@ impl Snake {
         self.body.end().unwrap()
     }
 
+    #[inline]
     pub fn starved(&self) -> bool {
         self.health == 0
     }
@@ -69,6 +70,7 @@ impl Snake {
         self.body.slide_start(dir.into());
     }
 
+    #[inline] //brings down pathfinding time a little bit
     pub fn size(&self) -> usize {
         self.body.num_nodes()
     }

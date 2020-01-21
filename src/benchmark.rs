@@ -1,23 +1,75 @@
+use std::str;
+use std::time::{SystemTime};
 use crate::game::path::Path;
 use crate::game::coord::Coord;
 use crate::game::offset::Offset;
-use crate::game::get_decision;
+use crate::game::{turn::Turn, get_decision};
 use crate::api::{ApiDirection::*, ApiGameState};
-use std::time::{SystemTime};
 use log::*;
 
 macro_rules! timed {
     ($name:expr, $code:block) => ({
         let start = SystemTime::now();
         $code
-        let duration = SystemTime::now().duration_since(start).unwrap();
-        info!("{}: {}ms", $name, duration.as_millis());
+        let duration = SystemTime::now().duration_since(start).unwrap().as_nanos();
+        info!("{}: {} ns", $name, fmt_int(duration));
     });
+    ($name:expr, $n:expr, $code:expr) => ({
+        let start = SystemTime::now();
+        for i in 0..$n {
+            $code(i);
+        }
+        let duration = SystemTime::now().duration_since(start).unwrap().as_nanos() / $n;
+        info!("{}: {} ns (avg. of {})", $name, fmt_int(duration), fmt_int($n as u128));
+    });
+}
+
+fn fmt_int(integer: u128) -> String {
+    String::from_utf8(integer
+        .to_string()
+        .bytes()
+        .rev()
+        .collect::<Vec<_>>()
+        .chunks(3)
+        .map(|chunk| str::from_utf8(chunk).unwrap())
+        .collect::<Vec<_>>()
+        .join(",")
+        .bytes()
+        .rev()
+        .collect::<Vec<_>>()
+    ).unwrap()
 }
 
 pub fn run_benchmark() {
     path_slide();
-    decision();
+    territories();
+    // decision();
+}
+
+fn territories() {
+    let game_state = ApiGameState::parse_basic("
+    |  |  |  |  |  |  |  |  |  |  |()|  |
+    |  |B2|B1|  |  |C2|C1|  |  |D1|D2|  |
+    |  |  |B0|  |  |  |C0|  |  |D0|  |  |
+    |  |()|  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |()|  |  |  |
+    |  |A1|A0|  |  |  |()|  |  |E0|E1|  |
+    |  |A2|  |  |  |  |  |  |  |  |E2|  |
+    |  |  |  |  |  |  |  |  |()|  |  |  |
+    |  |  |  |  |()|  |  |  |  |  |  |  |
+    |  |  |Y0|  |  |  |G0|  |  |F0|F1|  |
+    |  |Y2|Y1|  |  |  |G1|G2|  |  |F2|  |
+    |  |  |  |()|  |  |  |  |  |  |  |  |
+    ");
+    let turn = Turn::init(&game_state);
+
+    timed!("pathfind", 100, |_| {
+        let _path = turn.pathfind(turn.you().head(), Coord::new(11, 11));
+    });
+
+    timed!("territories", {
+        let _territories = turn.get_territories();
+    });
 }
 
 fn decision() {
@@ -36,10 +88,8 @@ fn decision() {
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
 
-    timed!("get_decision x1", {
-        for _ in 0..1 {
-            get_decision(&game_state);
-        }
+    timed!("get_decision", {
+        get_decision(&game_state);
     });
 }
 
@@ -59,9 +109,7 @@ fn path_slide() {
 
     let moves = &[Down, Right, Down, Left, Down, Right, Right, Right, Up, Left, Up, Right, Up, Left, Left, Left];
 
-    timed!("path_slide x100_000", {
-        for i in 0..100_000 {
-            path.slide_start(Offset::from(moves[i % moves.len()]));
-        }
+    timed!("path_slide", 100_000, |i| {
+        path.slide_start(Offset::from(moves[i % moves.len()]));
     });
 }

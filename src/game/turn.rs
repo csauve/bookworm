@@ -1,7 +1,10 @@
 use std::iter::once;
 use std::convert::TryFrom;
 use std::collections::{HashSet, HashMap};
+use std::sync::Mutex;
+use rayon::prelude::*;
 use crate::api::{ApiGameState, ApiDirection};
+use super::util::cartesian_product;
 use super::snake::{Snake, Health};
 use super::coord::{Coord, Unit, UnitAbs};
 use super::path::Path;
@@ -65,7 +68,7 @@ impl Turn {
     }
 
     //A* pathfinding, taking into account snake tail movements
-    fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
+    pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
         let mut frontier: HashSet<Coord> = HashSet::new();
         let mut breadcrumbs: HashMap<Coord, Coord> = HashMap::new();
         let mut best_dists: HashMap<Coord, UnitAbs> = HashMap::new();
@@ -78,8 +81,7 @@ impl Turn {
             }).unwrap();
 
             if leader == to {
-                let mut nodes = Vec::new();
-                nodes.push(leader);
+                let mut nodes = vec![leader];
                 while let Some(prev) = breadcrumbs.get(nodes.last().unwrap()) {
                     nodes.push(*prev);
                 }
@@ -106,52 +108,54 @@ impl Turn {
         None
     }
 
+    //for each coord on the board, find out which snake is closest. in a tie, neither snake receives the coord
     pub fn get_territories(&self) -> Vec<Territory> {
-        let mut territories = self.snakes.iter().map(|_| {
+        let territories = Mutex::new(self.snakes.iter().map(|_| {
             Territory {
                 area: 0,
                 food: Vec::new(),
             }
-        }).collect::<Vec<_>>();
+        }).collect::<Vec<_>>());
 
-        //for each coord on the board, find out which snake is closest. in a tie, neither snake receives the coord
-        for x in 0..=self.bound.x {
-            for y in 0..=self.bound.y {
-                let coord = Coord::new(x, y);
-                let mut best_path: Option<Path> = None;
-                let mut best_snake: Option<usize> = None;
-                for (i, snake) in self.snakes.iter().enumerate() {
-                    let snake_head = snake.head();
+        let coords = cartesian_product(&[(0..self.bound.x).collect(), (0..self.bound.y).collect()]);
 
-                    //if the best case path from this snake is still longer than the best, skip pathfinding
-                    if let Some(best) = best_path.as_ref() {
-                        if (coord - snake_head).manhattan_dist() > best.dist() {
-                            continue;
-                        }
-                    }
+        //approx 5x speedup on 8-core system doing in parallel
+        coords.par_iter().for_each(|coord| {
+            let coord = Coord::new(coord[0], coord[1]);
+            let mut best_path: Option<Path> = None;
+            let mut best_snake: Option<usize> = None;
+            for (i, snake) in self.snakes.iter().enumerate() {
+                let snake_head = snake.head();
 
-                    if let Some(path) = self.pathfind(snake_head, coord) {
-                        let path_dist = path.dist();
-                        if best_path.is_none() || path_dist < best_path.as_ref().unwrap().dist() {
-                            best_path = Some(path);
-                            best_snake = Some(i);
-                        } else if path_dist == best_path.as_ref().unwrap().dist() {
-                            best_snake = None;
-                        }
+                //if the best case path from this snake is still longer than the best, skip pathfinding
+                if let Some(best) = best_path.as_ref() {
+                    if (coord - snake_head).manhattan_dist() > best.dist() {
+                        continue;
                     }
                 }
 
-                if let Some(i) = best_snake {
-                    let territory = territories.get_mut(i).unwrap();
-                    territory.area += 1;
-                    if self.find_food(coord).is_some() {
-                        territory.food.push(best_path.unwrap());
+                if let Some(path) = self.pathfind(snake_head, coord) {
+                    let path_dist = path.dist();
+                    if best_path.is_none() || path_dist < best_path.as_ref().unwrap().dist() {
+                        best_path = Some(path);
+                        best_snake = Some(i);
+                    } else if path_dist == best_path.as_ref().unwrap().dist() {
+                        best_snake = None;
                     }
                 }
             }
-        }
 
-        territories
+            if let Some(i) = best_snake {
+                let mut territories = territories.lock().unwrap();
+                let territory = territories.get_mut(i).unwrap();
+                territory.area += 1;
+                if self.find_food(coord).is_some() {
+                    territory.food.push(best_path.unwrap());
+                }
+            }
+        });
+
+        territories.into_inner().unwrap()
     }
 
     //Applies game rules to the turn in order to predict the result. Note that we can't predict food spawns.
