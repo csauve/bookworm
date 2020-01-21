@@ -109,6 +109,7 @@ impl Turn {
     }
 
     //for each coord on the board, find out which snake is closest. in a tie, neither snake receives the coord
+    //todo: add a resolution parameter to do every n coords?
     pub fn get_territories(&self) -> Vec<Territory> {
         let territories = Mutex::new(self.snakes.iter().map(|_| {
             Territory {
@@ -128,7 +129,7 @@ impl Turn {
             //sort snakes by their best case distances -- it's likely we can skip checking most of them
             let mut sorted_snakes = self.snakes.iter()
                 .enumerate()
-                .map(|(i, snake)| (i, snake.clone())) //make sure to include original index before sorting
+                .map(|(i, snake)| (i, snake)) //make sure to include original index before sorting
                 .collect::<Vec<_>>();
             sorted_snakes.sort_unstable_by_key(|(_, snake)| (coord - snake.head()).manhattan_dist());
 
