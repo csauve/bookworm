@@ -20,7 +20,7 @@ type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
     let root_turn = Turn::init(game_state);
-    let (score, path) = evaluate_turn_b(&root_turn, MAX_LOOKAHEAD_DEPTH);
+    let (score, path) = evaluate_turn(&root_turn, MAX_LOOKAHEAD_DEPTH);
     debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
     path.first().cloned().unwrap_or_else(|| root_turn.you().get_default_move())
 }
@@ -49,7 +49,7 @@ fn heuristic(turn: &Turn) -> Score {
 }
 
 //todo: use a deadline instead of max_depth?
-fn evaluate_turn_b(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
+fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
     if max_depth == 0 {
         return (heuristic(turn), Vec::new());
     }
@@ -80,7 +80,7 @@ fn evaluate_turn_b(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
             match next_turn.advance(moves) {
                 AdvanceResult::YouDie => (0.0, vec![you_move]),
                 AdvanceResult::YouLive => {
-                    let (score, mut path) = evaluate_turn_b(&next_turn, max_depth - 1);
+                    let (score, mut path) = evaluate_turn(&next_turn, max_depth - 1);
                     path.insert(0, you_move);
                     (score, path)
                 }

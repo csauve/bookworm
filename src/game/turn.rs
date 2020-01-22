@@ -46,6 +46,19 @@ impl Turn {
         }
     }
 
+    //note -- hash key elements must are ordered such that key.0 < key.1
+    //todo: this actually slowed down evaluate_turn when used for pruning... can it be useful elsewhere?
+    pub fn get_snake_dist_matrix(&self) -> HashMap<(usize, usize), UnitAbs> {
+        let mut results = HashMap::new();
+        for (a, snake_a) in self.snakes.iter().enumerate() {
+            for (b, snake_b) in self.snakes.iter().enumerate().skip(a + 1) {
+                let dist = (snake_a.head() - snake_b.head()).manhattan_dist();
+                results.insert((a, b), dist);
+            }
+        }
+        results
+    }
+
     //gets the set of moves from this point which are not obstructed or out of bounds
     pub fn get_free_moves(&self, from: Coord, n_turns: usize) -> Vec<ApiDirection> {
         ALL_DIRS.iter().cloned().filter(|dir| {

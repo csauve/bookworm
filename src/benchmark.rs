@@ -92,7 +92,7 @@ fn decision() {
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
 
-    timed!("get_decision", {
+    timed!("get_decision", 10, |_| {
         get_decision(&game_state);
     });
 }
