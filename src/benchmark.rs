@@ -42,11 +42,11 @@ fn fmt_int(integer: u128) -> String {
 
 pub fn run_benchmark() {
     path_slide();
-    territories();
+    turn();
     decision();
 }
 
-fn territories() {
+fn turn() {
     let game_state = ApiGameState::parse_basic("
     |  |  |  |  |  |  |  |  |  |  |()|  |
     |  |B2|B1|  |  |C2|C1|  |  |D1|D2|  |
@@ -62,6 +62,10 @@ fn territories() {
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
     let turn = Turn::init(&game_state);
+
+    timed!("get_free_moves", 1_000, |_| {
+        turn.get_free_snake_moves()
+    });
 
     timed!("pathfind", 100, |_| {
         let _path = turn.pathfind(turn.you().head(), Coord::new(11, 11));

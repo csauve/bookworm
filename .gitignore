@@ -2,3 +2,5 @@
 .idea
 **/*.rs.bk
 notes.md
+perf.data
+perf.data.old

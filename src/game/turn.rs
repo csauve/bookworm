@@ -51,24 +51,23 @@ impl Turn {
         ALL_DIRS.iter().cloned().filter(|dir| {
             let new_coord = from + (*dir).into();
             new_coord.bounded_by(ORIGIN, self.bound) && self.snakes.iter().all(|snake| {
-                //finding the "first" node is key to avoiding moving into stacked tail coords
-                if let Some(i) = snake.find_first_node(new_coord) {
+                if (new_coord - snake.head()).manhattan_dist() > snake.size() {
+                    //can save a little time ruling out snakes which are too far away
+                    true
+                } else if let Some(i) = snake.find_first_node(new_coord) {
+                    //finding the "first" node is key to avoiding moving into stacked tail coords
                     //its safe to move into another snake if that node will be gone in n_turns
-                    return i >= snake.size().saturating_sub(n_turns);
+                    i >= snake.size().saturating_sub(n_turns)
+                } else {
+                    true
                 }
-                true
             })
         }).collect()
     }
 
     //find out where each snake can move to next
-    //todo: write a unit test
     pub fn get_free_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
         self.snakes.iter().map(|snake| self.get_free_moves(snake.head(), 1)).collect()
-    }
-
-    pub fn get_free_you_moves(&self) -> Vec<ApiDirection> {
-        self.get_free_moves(self.you().head(), 1)
     }
 
     //A* pathfinding, taking into account snake tail movements
@@ -79,6 +78,7 @@ impl Turn {
         frontier.insert(from);
         best_dists.insert(from, 0);
 
+        //todo: we spend a lot of time in min_by_key and hashing Coords -- optimize?
         while !frontier.is_empty() {
             let leader = *frontier.iter().min_by_key(|&coord| {
                 best_dists.get(coord).unwrap() + (to - *coord).manhattan_dist()
@@ -255,7 +255,7 @@ impl Turn {
     }
 }
 
-//todo: write more tests (head-to-head, head-to-body, pathfinding, territories, ...)
+//todo: write more tests (head-to-head, head-to-body, pathfinding, territories, free moves, ...)
 #[cfg(test)]
 mod tests {
     use super::*;
