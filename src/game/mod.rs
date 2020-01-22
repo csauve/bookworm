@@ -11,9 +11,10 @@ use coord::UnitAbs;
 use turn::{Turn, AdvanceResult};
 use util::cartesian_product;
 
+//these numbers are weak!!! time to optimize moar
 const MAX_LOOKAHEAD_DEPTH: u8 = 3;
 const PRIORITY_DIST: UnitAbs = 3;
-const MIN_PRIORITY_SNAKES: UnitAbs = 2;
+const MIN_PRIORITY_SNAKES: UnitAbs = 1;
 
 type Score = f32;
 
