@@ -67,6 +67,10 @@ impl Turn {
         self.snakes.iter().map(|snake| self.get_free_moves(snake.head(), 1)).collect()
     }
 
+    pub fn get_free_you_moves(&self) -> Vec<ApiDirection> {
+        self.get_free_moves(self.you().head(), 1)
+    }
+
     //A* pathfinding, taking into account snake tail movements
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
         let mut frontier: HashSet<Coord> = HashSet::new();

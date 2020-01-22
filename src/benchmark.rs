@@ -43,7 +43,7 @@ fn fmt_int(integer: u128) -> String {
 pub fn run_benchmark() {
     path_slide();
     territories();
-    // decision();
+    decision();
 }
 
 fn territories() {

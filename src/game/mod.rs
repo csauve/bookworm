@@ -5,30 +5,28 @@ pub mod snake;
 pub mod turn;
 mod util;
 
-use std::collections::HashMap;
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
 use coord::UnitAbs;
-use turn::{Turn, AdvanceResult, Territory};
-use std::cmp::{max, min};
+use turn::{Turn, AdvanceResult};
 use util::cartesian_product;
 
-const MAX_LOOKAHEAD_DEPTH: u8 = 1;
-const FORCE_EXPLORE_DIST: UnitAbs = 3;
-const FORCE_EXPLORE_SNAKES: UnitAbs = 2;
+const MAX_LOOKAHEAD_DEPTH: u8 = 3;
+const PRIORITY_DIST: UnitAbs = 3;
+const MIN_PRIORITY_SNAKES: UnitAbs = 2;
 
 type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
     let root_turn = Turn::init(game_state);
-
-    let (dir, _score) = evaluate_turn(&root_turn, MAX_LOOKAHEAD_DEPTH);
-    dir
+    let (score, path) = evaluate_turn_b(&root_turn, MAX_LOOKAHEAD_DEPTH);
+    debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
+    path.first().cloned().unwrap_or_else(|| root_turn.you().get_default_move())
 }
 
-//should return a value 0-1 representing surviveability of the snake
-fn heuristic(snake_index: usize, turn: &Turn, territories: &[Territory]) -> Option<Score> {
-    turn.snakes.get(snake_index).map(|snake| {
+fn heuristic(turn: &Turn) -> Score {
+    let territories = turn.get_territories();
+    let indiv_scores = turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
         let territory = territories.get(snake_index).unwrap();
         //todo: tune heuristics (e.g. prevent from being too big)
         let h_control = territory.area as Score / turn.area() as Score;
@@ -38,79 +36,57 @@ fn heuristic(snake_index: usize, turn: &Turn, territories: &[Territory]) -> Opti
             .count() as Score /
             turn.snakes.len() as Score;
         h_food * h_head_to_head * h_control
-    })
+    }).collect::<Vec<_>>();
+
+    let you_score = indiv_scores[0];
+    let enemy_score_sum = indiv_scores.iter().skip(1).fold(0.0, |sum, s| sum + s);
+    if indiv_scores.len() <= 2 {
+        you_score - enemy_score_sum
+    } else {
+        you_score - enemy_score_sum / (indiv_scores.len() as Score - 1.0)
+    }
 }
 
-fn evaluate_turn_b(turn: &Turn, max_depth: u8) -> ApiDirection {
-    let territories = turn.get_territories();
+//todo: use a deadline instead of max_depth?
+fn evaluate_turn_b(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
+    if max_depth == 0 {
+        return (heuristic(turn), Vec::new());
+    }
 
-    //determine which moves of each snake we want to explore
-    let moves = turn.get_free_snake_moves().iter().cloned().enumerate()
+    //it's impractical to explore the entire turn tree, so filter moves out.
+    //also ensure every snake makes at least their default move
+    let moves_to_explore = turn.get_free_snake_moves().iter().enumerate()
         .map(|(i, moves)| {
-            let explore_all = i == 0 ||
-                turn.snakes.len() <= FORCE_EXPLORE_SNAKES ||
-                (turn.snakes[i].head() - turn.you().head()).manhattan_dist() <= FORCE_EXPLORE_DIST;
-            if explore_all {
-                return moves;
+            let default_move = turn.snakes[i].get_default_move();
+            let is_priority_snake = i < MIN_PRIORITY_SNAKES ||
+                (turn.snakes[i].head() - turn.you().head()).manhattan_dist() <= PRIORITY_DIST;
+            if moves.is_empty() {
+                vec![default_move]
+            } else if is_priority_snake {
+                moves.clone()
+            } else if moves.contains(&default_move) {
+                vec![default_move]
+            } else {
+                vec![moves[0]]
             }
-            moves.iter().cloned().filter(|&dir| {
-                //for snakes that dont matter so much, let's just assume they make a move that's best for them heuristically
-                let score = heuristic(i, turn, &territories).unwrap_or(0.0);
-                true
-            }).collect::<Vec<_>>()
         })
         .collect::<Vec<_>>();
 
-    ApiDirection::Up
-}
-
-fn evaluate_turn(turn: &Turn, max_depth: u8) -> (ApiDirection, Score) {
-    // debug!("Evaluating turn at max_depth {}", max_depth);
-
-    let territories = turn.get_territories();
-
-    //todo: are there other conditions we can bail out on?
-    if max_depth == 0 {
-        return (ApiDirection::Up, heuristic(0, turn, &territories).unwrap());
-    }
-
-    //todo: add mid-term planning with "plays"; use `territories`
-
-    //todo: prune enemy moves which don't affect us; and by max enemy scores
-    let legal_moves = turn.get_free_snake_moves();
-    let mut by_you_move: HashMap<ApiDirection, Vec<Score>> = HashMap::new();
-
-    for moves in cartesian_product(&legal_moves).iter() {
-        let mut future_turn = turn.clone();
-        let you_move = moves[0];
-        let score = match future_turn.advance(moves) {
-            AdvanceResult::YouLive => {
-                let (_, score) = evaluate_turn(&future_turn, max_depth - 1);
-                score
-            },
-            AdvanceResult::YouDie => {
-                0.0
-            },
-        };
-        if let Some(values) = by_you_move.get_mut(&you_move) {
-            values.push(score);
-        } else {
-            by_you_move.insert(you_move.clone(), vec![score]);
-        }
-    }
-
-    let average_scores = by_you_move.iter()
-        .map(|(dir, scores)| (*dir, scores.iter().sum::<Score>() / scores.len() as Score))
-        .collect::<Vec<_>>();
-
-    if max_depth == MAX_LOOKAHEAD_DEPTH {
-        dbg!(&average_scores);
-    }
-
-    average_scores.iter().cloned()
-        .max_by(|(_, score_a), (_, score_b)| score_a.partial_cmp(score_b).unwrap())
-        //if we can't find a move, just pick default and pray to snake jesusSsSSss
-        .unwrap_or_else(|| (turn.you().get_default_move(), 0.0))
+    cartesian_product(&moves_to_explore).iter()
+        .map(|moves| {
+            let mut next_turn = turn.clone();
+            let you_move = moves[0];
+            match next_turn.advance(moves) {
+                AdvanceResult::YouDie => (0.0, vec![you_move]),
+                AdvanceResult::YouLive => {
+                    let (score, mut path) = evaluate_turn_b(&next_turn, max_depth - 1);
+                    path.insert(0, you_move);
+                    (score, path)
+                }
+            }
+        })
+        .max_by(|(score_a, _), (score_b, _)| score_a.partial_cmp(score_b).unwrap())
+        .unwrap_or_else(|| (0.0, vec![]))
 }
 
 #[cfg(test)]
