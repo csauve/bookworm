@@ -8,10 +8,12 @@ use super::util::cartesian_product;
 use super::snake::{Snake, Health};
 use super::coord::{Coord, Unit, UnitAbs};
 use super::path::Path;
+use log::*;
 
 const SNAKE_MAX_HEALTH: Health = 100;
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
+const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
 
 #[derive(PartialEq, Debug)]
 pub enum AdvanceResult {
@@ -83,40 +85,43 @@ impl Turn {
         self.snakes.iter().map(|snake| self.get_free_moves(snake.head(), 1)).collect()
     }
 
+    //todo: try returning distance only
     //A* pathfinding, taking into account snake tail movements
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
         let mut frontier: HashSet<Coord> = HashSet::new();
-        let mut breadcrumbs: HashMap<Coord, Coord> = HashMap::new();
-        let mut best_dists: HashMap<Coord, UnitAbs> = HashMap::new();
+        //keeping known dists and breadcrumbs together in one tuple reduces hash operations
+        let mut history: HashMap<Coord, (UnitAbs, Option<Coord>)> = HashMap::new();
         frontier.insert(from);
-        best_dists.insert(from, 0);
+        history.insert(from, (0, None));
 
-        //todo: we spend a lot of time in min_by_key and hashing Coords -- optimize?
         while !frontier.is_empty() {
+            //todo: g(i) tiebreaking https://movingai.com/astar.html
             let leader = *frontier.iter().min_by_key(|&coord| {
-                best_dists.get(coord).unwrap() + (to - *coord).manhattan_dist()
+                //static weighting: https://en.wikipedia.org/wiki/A*_search_algorithm#Bounded_relaxation
+                history.get(coord).map(|hist| hist.0).unwrap_or(0) + (to - *coord).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT
             }).unwrap();
 
             if leader == to {
                 let mut nodes = vec![leader];
-                while let Some(prev) = breadcrumbs.get(nodes.last().unwrap()) {
+                while let Some((_, Some(prev))) = history.get(nodes.last().unwrap()) {
                     nodes.push(*prev);
                 }
                 return Some(Path::from_vec(nodes));
             }
 
             frontier.remove(&leader);
-            let leader_dist = *best_dists.get(&leader).unwrap();
+            let leader_dist = history.get(&leader).map(|hist| hist.0).unwrap_or(0);
             let free_spaces = self.get_free_moves(leader, leader_dist).iter()
                 .map(|dir| leader + (*dir).into())
                 .collect::<Vec<_>>();
 
+            //todo: try JPS https://zerowidth.com/2013/a-visual-explanation-of-jump-point-search.html
             for free_space in free_spaces {
                 let dist = leader_dist + 1;
-                let best_dist = best_dists.get(&free_space);
-                if best_dist.is_none() || dist < *best_dist.unwrap() {
-                    breadcrumbs.insert(free_space, leader);
-                    best_dists.insert(free_space, dist);
+                let hist = history.get(&free_space);
+                if hist.is_none() || dist < (*hist.unwrap()).0 {
+                    //todo: https://github.com/riscy/a_star_on_grids#avoid-recomputing-heuristics
+                    history.insert(free_space, (dist, Some(leader)));
                     frontier.insert(free_space);
                 }
             }
@@ -137,7 +142,7 @@ impl Turn {
 
         let coords = cartesian_product(&[(0..self.bound.x).collect(), (0..self.bound.y).collect()]);
 
-        //approx 5x speedup on 8-core system doing in parallel
+        //large number of tasks with no need to synchronize; good spot to parallelize
         coords.par_iter().for_each(|coord| {
             let coord = Coord::new(coord[0], coord[1]);
             let mut best_path: Option<Path> = None;
