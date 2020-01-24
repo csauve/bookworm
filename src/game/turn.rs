@@ -1,7 +1,11 @@
-use std::iter::once;
+use std::iter;
 use std::convert::TryFrom;
 use std::collections::{HashSet, HashMap};
 use std::sync::Mutex;
+use std::fmt;
+use rand::prelude::*;
+use rand::seq::SliceRandom;
+use std::iter::FromIterator;
 use rayon::prelude::*;
 use crate::api::{ApiGameState, ApiDirection};
 use super::util::cartesian_product;
@@ -11,6 +15,8 @@ use super::path::Path;
 use log::*;
 
 const SNAKE_MAX_HEALTH: Health = 100;
+const SNAKE_START_SIZE: UnitAbs = 3;
+const FOOD_SPAWN_CHANCE: f32 = 0.15;
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
@@ -34,18 +40,76 @@ pub struct Territory {
 }
 
 impl Turn {
-    pub fn init(width: UnitAbs, height: UnitAbs) -> Turn {
-        Turn {
+    pub fn init(width: UnitAbs, height: UnitAbs, num_snakes: usize) -> Result<Turn, &'static str> {
+        let mut rng = rand::thread_rng();
+        let mut free_spaces: Vec<Coord> = Vec::from_iter(
+            cartesian_product(&[
+                (0..width as Unit).collect(),
+                (0..height as Unit).collect()
+            ]).iter().map(|v| Coord::new(v[0], v[1]))
+        );
+
+        let snakes = match (width, height) {
+            (7, 7) | (11, 11) | (19, 19) if num_snakes <= 8 => {
+                //the rules define 3 fixed board sizes with 8 fixed starting positions
+                let mn = 1 as Unit;
+                let md = (width - 1 / 2) as Unit;
+                let mx = (width - 2) as Unit;
+                let mut fixed_starts = [
+                    Coord::new(mn, mn),
+                    Coord::new(mn, md),
+                    Coord::new(mn, mx),
+                    Coord::new(md, mn),
+                    Coord::new(md, mx),
+                    Coord::new(mx, mn),
+                    Coord::new(mx, md),
+                    Coord::new(mx, mx),
+                ];
+                fixed_starts.shuffle(&mut rng);
+                fixed_starts.iter().take(num_snakes).map(|start| {
+                    let i = free_spaces.iter().position(|coord| coord == start).unwrap();
+                    free_spaces.swap_remove(i);
+                    Snake::init(SNAKE_MAX_HEALTH, *start, SNAKE_START_SIZE)
+                }).collect()
+            },
+            _ => {
+                //otherwise, all snakes spawn in random positions if there's space
+                if free_spaces.len() < num_snakes {
+                    return Err("The board is not big enough to contain all requested snakes");
+                }
+                iter::repeat_with(|| {
+                    let start = free_spaces.swap_remove(rng.gen_range(0, free_spaces.len()));
+                    Snake::init(SNAKE_MAX_HEALTH, start, SNAKE_START_SIZE)
+                }).take(num_snakes).collect()
+            },
+        };
+
+        let food_spawner = iter::repeat_with(|| {
+            if free_spaces.is_empty() {
+                warn!("Ran out of free space to spawn food");
+                None
+            } else {
+                Some(free_spaces.swap_remove(rng.gen_range(0, free_spaces.len())))
+            }
+        });
+
+        Ok(Turn {
+            snakes,
+            food: food_spawner
+                .take_while(Option::is_some)
+                .take(num_snakes)
+                .map(Option::unwrap)
+                .collect(),
             bound: Coord::new(
                 width as Unit - 1,
                 height as Unit - 1
             )
-        }
+        })
     }
 
     pub fn from_api(game_state: &ApiGameState) -> Turn {
         Turn {
-            snakes: once(&game_state.you)
+            snakes: iter::once(&game_state.you)
                 .chain(game_state.board.snakes.iter())
                 .map(|s| Snake::from_api(s).unwrap())
                 .collect(),
@@ -97,6 +161,7 @@ impl Turn {
     //todo: try returning distance only
     //A* pathfinding, taking into account snake tail movements
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
+        //todo: try using a std::collections::BinaryHeap for open set
         let mut frontier: HashSet<Coord> = HashSet::new();
         //keeping known dists and breadcrumbs together in one tuple reduces hash operations
         let mut history: HashMap<Coord, (UnitAbs, Option<Coord>)> = HashMap::new();
@@ -279,6 +344,12 @@ impl Turn {
 
     pub fn infer_you_move(prev_turn: &Turn, next_turn: &Turn) -> Result<ApiDirection, &'static str> {
         ApiDirection::try_from(next_turn.you().head() - prev_turn.you().head())
+    }
+}
+
+impl fmt::Display for Turn {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "()")
     }
 }
 

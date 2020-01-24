@@ -1,3 +1,4 @@
+//todo: try returning an iterator instead to avoid allocating the vec if caller doesnt need it
 pub fn cartesian_product<T: Copy>(lists: &[Vec<T>]) -> Vec<Vec<T>> {
     lists.iter().fold(vec![vec![]], |product, list| {
         list.iter().flat_map(|item| {

@@ -6,11 +6,12 @@ use crate::game::coord::UnitAbs;
 use crate::api::*;
 
 pub async fn run_game(_timeout_ms: u32, snakes_addrs: Vec<String>, width: UnitAbs, height: UnitAbs) {
+    info!("Initializing {}x{} board", width, height);
+    let num_snakes = snakes_addrs.len();
+    let mut turn = Turn::init(width, height, num_snakes).unwrap();
+
     //todo: set timeout
     let mut client = Client::default();
-
-    info!("Initializing {}x{} board", width, height);
-    let mut turn = Turn::init(width, height);
 
     let snake_configs = snakes_addrs.par_iter().map(|addr| async {
         client.call(Request::post(format!("{}/start", addr))

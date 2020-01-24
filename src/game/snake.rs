@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use std::iter;
 use crate::api::{ApiSnake, ApiDirection};
 use super::path::Path;
 use super::coord::Coord;
@@ -13,6 +14,13 @@ pub struct Snake {
 }
 
 impl Snake {
+
+    pub fn init(health: Health, start: Coord, size: usize) -> Snake {
+        Snake {
+            health,
+            body: Path::from_vec(iter::repeat(start).take(size).collect())
+        }
+    }
 
     pub fn from_api(api_snake: &ApiSnake) -> Result<Snake, &'static str> {
         if api_snake.body.is_empty() {
