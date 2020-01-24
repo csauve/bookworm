@@ -16,15 +16,10 @@ use log::*;
 
 const SNAKE_MAX_HEALTH: Health = 100;
 const SNAKE_START_SIZE: UnitAbs = 3;
-const FOOD_SPAWN_CHANCE: f32 = 0.15;
+const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
-
-#[derive(PartialEq, Debug)]
-pub enum AdvanceResult {
-    YouLive, YouDie
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Turn {
@@ -39,6 +34,7 @@ pub struct Territory {
     pub food: Vec<Path>,
 }
 
+//todo: rename to board
 impl Turn {
     pub fn init(width: UnitAbs, height: UnitAbs, num_snakes: usize) -> Result<Turn, &'static str> {
         let mut rng = rand::thread_rng();
@@ -263,8 +259,8 @@ impl Turn {
         territories.into_inner().unwrap()
     }
 
-    //Applies game rules to the turn in order to predict the result. Note that we can't predict food spawns.
-    pub fn advance(&mut self, snake_moves: &[ApiDirection]) -> AdvanceResult {
+    //Applies known game rules to the turn, returning indices of snakes that died
+    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashSet<usize> {
         let mut eaten_food_indices: HashSet<usize> = HashSet::new();
 
         //move snakes and find eaten food
@@ -296,10 +292,6 @@ impl Turn {
             None
         }).collect::<HashSet<usize>>();
 
-        if dead_snake_indices.contains(&0) {
-            return AdvanceResult::YouDie;
-        }
-
         //clean up
         if !eaten_food_indices.is_empty() {
             self.food = self.food.iter().enumerate()
@@ -311,7 +303,29 @@ impl Turn {
                 .filter_map(|(i, s)| if dead_snake_indices.contains(&i) {None} else {Some(s.clone())})
                 .collect();
         }
-        AdvanceResult::YouLive
+
+        if spawn_food {
+            let mut rng = rand::thread_rng();
+            if rng.next_u32() <= FOOD_SPAWN_CHANCE {
+                let mut free_spaces: Vec<Coord> = Vec::from_iter(
+                    cartesian_product(&[
+                        (0..self.width() as Unit).collect(),
+                        (0..self.height() as Unit).collect()
+                    ]).iter().filter_map(|v| {
+                        let coord = Coord::new(v[0], v[1]);
+                        for snake in self.snakes.iter() {
+                            if let Some(_) = snake.find_first_node(coord) {
+                                return None;
+                            }
+                        }
+                        Some(coord)
+                    })
+                );
+                self.food.push(*free_spaces.get(rng.gen_range(0, free_spaces.len())).unwrap());
+            }
+        }
+
+        dead_snake_indices
     }
 
     pub fn you(&self) -> &Snake {
@@ -330,6 +344,7 @@ impl Turn {
         (self.bound.x + 1) as UnitAbs
     }
 
+    //todo: Unit vs UnitAbs
     pub fn height(&self) -> UnitAbs {
         (self.bound.y + 1) as UnitAbs
     }

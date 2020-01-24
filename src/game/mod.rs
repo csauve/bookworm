@@ -8,7 +8,7 @@ mod util;
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
 use coord::UnitAbs;
-use turn::{Turn, AdvanceResult};
+use turn::{Turn};
 use util::cartesian_product;
 
 //these numbers are weak!!! time to optimize moar
@@ -49,6 +49,7 @@ fn heuristic(turn: &Turn) -> Score {
 }
 
 //todo: use a deadline instead of max_depth?
+//todo: pass in a "you_index" ?
 fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
     if max_depth == 0 {
         return (heuristic(turn), Vec::new());

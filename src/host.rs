@@ -21,13 +21,14 @@ pub async fn run_game(_timeout_ms: u32, snakes_addrs: Vec<String>, width: UnitAb
     }).collect::<Vec<_>>();
 
     while turn.snakes.len() > 1 {
-        let snake_moves = snakes_addrs.par_iter().map(|addr| async {
+        let snake_moves = snakes_addrs.par_iter().filter_map(|addr| {
             let game_state = build_api_game_state(&turn);
-            client.call(Request::post(format!("{}/move", addr))
+            let req = Request::post(format!("{}/move", addr))
                 .body(Body::from(serde_json::to_string(&game_state).unwrap()))
-                .unwrap()
-            ).await
-        }).collect::<Vec<_>>().await;
+                .unwrap();
+            let res = client.request(req)
+            None
+        }).collect::<Vec<_>>();
 
         let deaths = turn.advance(&snake_moves);
 
