@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 pub type ApiGameId = String;
 pub type ApiSnakeId = String;
 
-#[derive(Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ApiSnakeConfig {
     pub color: String,
@@ -13,18 +13,18 @@ pub struct ApiSnakeConfig {
     pub tail_type: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ApiGame {
     pub id: ApiGameId,
 }
 
-#[derive(Deserialize, Copy, Clone, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Debug)]
 pub struct ApiCoords {
     pub x: u32,
     pub y: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ApiBoard {
     pub height: u32,
     pub width: u32,
@@ -32,7 +32,7 @@ pub struct ApiBoard {
     pub snakes: Vec<ApiSnake>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct ApiSnake {
     pub id: ApiSnakeId,
     pub name: String,
@@ -40,7 +40,7 @@ pub struct ApiSnake {
     pub body: Vec<ApiCoords>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ApiGameState {
     pub game: ApiGame,
     pub turn: u32,
@@ -48,7 +48,7 @@ pub struct ApiGameState {
     pub you: ApiSnake,
 }
 
-#[derive(Serialize, Copy, Clone, PartialEq, Debug, Eq, Hash)]
+#[derive(Deserialize, Serialize, Copy, Clone, PartialEq, Debug, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiDirection {
     Up,
@@ -57,7 +57,7 @@ pub enum ApiDirection {
     Right,
 }
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct ApiMove {
     #[serde(rename = "move")]
     pub decision: ApiDirection,

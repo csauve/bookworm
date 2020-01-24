@@ -61,7 +61,7 @@ fn turn() {
     |  |Y2|Y1|  |  |  |G1|G2|  |  |F2|  |
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
-    let turn = Turn::init(&game_state);
+    let turn = Turn::from_api(&game_state);
 
     timed!("get_free_moves", 1_000, |_| {
         turn.get_free_snake_moves()

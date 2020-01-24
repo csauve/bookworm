@@ -19,7 +19,7 @@ const MIN_PRIORITY_SNAKES: UnitAbs = 1;
 type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
-    let root_turn = Turn::init(game_state);
+    let root_turn = Turn::from_api(game_state);
     let (score, path) = evaluate_turn(&root_turn, MAX_LOOKAHEAD_DEPTH);
     debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
     path.first().cloned().unwrap_or_else(|| root_turn.you().get_default_move())

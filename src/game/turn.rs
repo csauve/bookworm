@@ -34,7 +34,16 @@ pub struct Territory {
 }
 
 impl Turn {
-    pub fn init(game_state: &ApiGameState) -> Turn {
+    pub fn init(width: UnitAbs, height: UnitAbs) -> Turn {
+        Turn {
+            bound: Coord::new(
+                width as Unit - 1,
+                height as Unit - 1
+            )
+        }
+    }
+
+    pub fn from_api(game_state: &ApiGameState) -> Turn {
         Turn {
             snakes: once(&game_state.you)
                 .chain(game_state.board.snakes.iter())
@@ -284,7 +293,7 @@ mod tests {
         ($moves:expr, $curr:expr) => (
             {
                 let game_state = ApiGameState::parse_basic($curr);
-                let prev = Turn::init(&game_state);
+                let prev = Turn::from_api(&game_state);
                 let mut next = prev.clone();
                 let result = next.advance($moves);
                 (prev, next, result)
@@ -302,7 +311,7 @@ mod tests {
         |  |  |  |
         ");
 
-        let turn = Turn::init(&api_game);
+        let turn = Turn::from_api(&api_game);
         assert_eq!(turn.food, vec![Coord::new(1, 0)]);
         assert_eq!(turn.enemies()[0].head(), Coord::new(0, 2));
         assert_eq!(turn.enemies()[0].tail(), Coord::new(1, 3));
