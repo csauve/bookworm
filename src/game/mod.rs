@@ -49,7 +49,7 @@ fn heuristic(turn: &Turn) -> Score {
 }
 
 //todo: use a deadline instead of max_depth?
-//todo: pass in a "you_index" ?
+//assumes the "you" index is 0 to avoid reshuffling complexity
 fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
     if max_depth == 0 {
         return (heuristic(turn), Vec::new());
@@ -78,13 +78,13 @@ fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
         .map(|moves| {
             let mut next_turn = turn.clone();
             let you_move = moves[0];
-            match next_turn.advance(moves) {
-                AdvanceResult::YouDie => (0.0, vec![you_move]),
-                AdvanceResult::YouLive => {
-                    let (score, mut path) = evaluate_turn(&next_turn, max_depth - 1);
-                    path.insert(0, you_move);
-                    (score, path)
-                }
+            let dead_snake_indices = next_turn.advance(false, moves);
+            if dead_snake_indices.contains(&0) {
+                (0.0, vec![you_move])
+            } else {
+                let (score, mut path) = evaluate_turn(&next_turn, max_depth - 1);
+                path.insert(0, you_move);
+                (score, path)
             }
         })
         .max_by(|(score_a, _), (score_b, _)| score_a.partial_cmp(score_b).unwrap())

@@ -34,6 +34,15 @@ impl From<&ApiCoords> for Coord {
     }
 }
 
+impl From<&Coord> for ApiCoords {
+    fn from(coord: &Coord) -> Self {
+        ApiCoords {
+            x: coord.x as u32,
+            y: coord.y as u32,
+        }
+    }
+}
+
 impl Coord {
 
     #[inline]

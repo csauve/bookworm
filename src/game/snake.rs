@@ -10,7 +10,7 @@ pub type Health = u8; //make this u16 if there will be health > 256
 #[derive(Clone, PartialEq, Debug)]
 pub struct Snake {
     pub health: Health,
-    body: Path,
+    pub body: Path,
 }
 
 impl Snake {

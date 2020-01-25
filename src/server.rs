@@ -4,7 +4,6 @@ use hyper::{Body, Request, Response, Server, Method, StatusCode, body, service::
 use crate::api::{ApiSnakeConfig, ApiMove};
 use crate::game::get_decision;
 
-#[tokio::main]
 pub async fn start_server(ip: IpAddr, port: u16) {
     let addr = SocketAddr::new(ip, port);
     println!("

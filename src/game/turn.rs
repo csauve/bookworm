@@ -373,7 +373,6 @@ impl fmt::Display for Turn {
 mod tests {
     use super::*;
     use crate::api::ApiDirection::*;
-    use super::AdvanceResult::*;
 
     macro_rules! advance {
         ($moves:expr, $curr:expr) => (
@@ -381,7 +380,7 @@ mod tests {
                 let game_state = ApiGameState::parse_basic($curr);
                 let prev = Turn::from_api(&game_state);
                 let mut next = prev.clone();
-                let result = next.advance($moves);
+                let result = next.advance(false, $moves);
                 (prev, next, result)
             }
         );
@@ -416,7 +415,7 @@ mod tests {
         ");
 
         //the Y snake didn't hit any walls
-        assert_eq!(result, YouLive);
+        assert!(result.is_empty());
         //no food was eaten
         assert_eq!(prev.food, next.food);
         assert_eq!(prev.food, next.food);
@@ -438,7 +437,7 @@ mod tests {
         |  |  |  |  |  |
         ");
         assert_eq!(prev.you().size(), 9);
-        assert_eq!(next.you().size(), 9);
-        assert_eq!(result, YouDie);
+        assert_eq!(next.snakes.len(), 0);
+        assert!(result.contains(&0));
     }
 }

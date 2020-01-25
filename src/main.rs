@@ -24,7 +24,8 @@ impl log::Log for Logger {
 
 const LOGGER: Logger = Logger;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     if set_logger(&LOGGER).is_ok() {
         log::set_max_level(LevelFilter::Debug)
     }
@@ -83,15 +84,15 @@ fn main() {
             server::start_server(
                 args.value_of("ip").unwrap().parse().expect("IP must be an IPV6 or IPV4 format"),
                 args.value_of("port").unwrap().parse().expect("Port must be numeric")
-            );
+            ).await;
         }
         ("host", Some(args)) => {
             host::run_game(
                 args.value_of("timeout").unwrap().parse().expect("Timeout must be numeric"),
-                args.values_of("snake").expect("At least one snake is needed").map(String::from).collect(),
+                &args.values_of("snake").expect("At least one snake is needed").map(String::from).collect::<Vec<_>>(),
                 args.value_of("width").unwrap().parse().expect("Width must be numeric"),
                 args.value_of("height").unwrap().parse().expect("Height must be numeric")
-            );
+            ).await;
         }
         ("benchmark", _) => {
             benchmark::run_benchmark();
