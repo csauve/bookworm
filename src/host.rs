@@ -1,12 +1,16 @@
 use std::sync::Mutex;
-use futures::future;
+use futures::{future, FutureExt};
 use log::*;
+use tokio_timer::Timeout;
+use std::time::Duration;
 use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
 use crate::game::turn::Turn;
 use crate::game::snake::Snake;
 use crate::game::coord::UnitAbs;
 use crate::api::*;
+
+const START_TIMEOUT: u64 = 5000;
 
 struct LiveSnake {
     pub id: ApiSnakeId,
@@ -18,11 +22,14 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
     let req = Request::post(format!("{}/start", addr))
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
-    match client.request(req).await {
-        Err(e) => {
+    match Timeout::new(client.request(req), Duration::from_millis(START_TIMEOUT)).await {
+        TimeoutErr => {
+            Err(format!("Snake @ {} timed out after {} ms", addr, START_TIMEOUT))
+        },
+        Ok(Err(e)) => {
             Err(format!("Snake @ {} failed to reply: {}", addr, e))
         },
-        Ok(res) => {
+        Ok(Ok(res)) => {
             let res_body = res.into_body();
             match serde_json::from_slice::<ApiSnakeConfig>(&body::to_bytes(res_body).await.unwrap()) {
                 Ok(snake_config) => Ok(snake_config),
@@ -34,45 +41,53 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
     }
 }
 
+async fn get_move(client: &Client<HttpConnector>, addr: &str, game_state: ApiGameState) -> Result<ApiMove, String> {
+
+}
+
 pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs) {
     info!("Initializing {}x{} board", width, height);
     let mut turn = Turn::init(width, height, snakes_addrs.len()).unwrap();
     let mut turn_index: u32 = 0;
-    let game_id: ApiGameId = Uuid::new_v4().to_string();;
-    let client = Client::default(); //todo: set timeout
+    let game_id: ApiGameId = Uuid::new_v4().to_string();
+    let client = Client::default();
 
     info!("Notifying snakes of game start; id: {}", &game_id);
-    let start_responses = future::join_all(
+    let live_snakes = future::try_join_all(
+        //build an iterator of futures representing results of /start API call
         snakes_addrs.iter().enumerate().map(|(snake_index, addr)| {
             let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
-            notify_start(&client, &addr, game_state)
+            let addr_copy = addr.clone();
+            //within the future, within the result, wrap their response in a LiveSnake
+            notify_start(&client, &addr, game_state).map(|call_result| {
+                call_result.map(|conf| {
+                    LiveSnake {
+                        id: Uuid::new_v4().to_string(),
+                        addr: addr_copy,
+                        config: conf
+                    }
+                })
+            })
         })
     ).await;
 
-    let start_errs: Vec<String> = start_responses.iter().filter_map(|result| result.err()).collect();
-    if !start_errs.is_empty() {
-        for msg in start_errs.iter() {
-            error!("{}", msg);
-        }
-        error!("Some snake(s) failed to respond to the start call. Shutting down");
+    if let Err(e) = live_snakes {
+        error!("Some snake(s) failed to respond to the start call: {}", &e);
         return;
     }
-
-    let live_snakes: Mutex<Vec<LiveSnake>> = Mutex::new(start_responses.iter().map)
+    let mut live_snakes = live_snakes.unwrap();
 
     while turn.snakes.len() > 1 {
         info!("Requesting moves for turn {}", turn_index);
-        let snake_moves = turn.snakes.iter().enumerate().map(|(i, snake)| {
-            let game_state = build_api_game_state(&turn, i, turn_index, &game_id);
-            // let req = Request::post(format!("{}/move", addr))
-            //     .body(Body::from(serde_json::to_string(&game_state).unwrap()))
-            //     .unwrap();
-            // if let Ok(res) = client.request(req).await {
-            //
-            // } else {
-            //
-            // }
-        }).collect::<Vec<_>>();
+        let snake_moves = future::join_all(
+            turn.snakes.iter().enumerate().map(|(snake_index, live_snake)| {
+                let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
+                let addr = live_snakes.get(snake_index).unwrap().addr;
+                get_move(&client, &addr, game_state).map(|call_result| {
+                    call_result
+                })
+            })
+        ).await;
 
         // let dead_snake_indices = turn.advance(true, &snake_moves);
 

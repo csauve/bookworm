@@ -16,3 +16,4 @@ rayon = "1.1"
 rand = "0.7.3"
 uuid = { version = "0.8", features = ["v4"] }
 futures = "0.3.1"
+tokio-timer = "0.3.0-alpha.5"
