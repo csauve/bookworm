@@ -42,7 +42,7 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
 }
 
 async fn get_move(client: &Client<HttpConnector>, addr: &str, game_state: ApiGameState) -> Result<ApiMove, String> {
-
+    //todo
 }
 
 pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs) {
@@ -80,18 +80,28 @@ pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs,
     while turn.snakes.len() > 1 {
         info!("Requesting moves for turn {}", turn_index);
         let snake_moves = future::join_all(
-            turn.snakes.iter().enumerate().map(|(snake_index, live_snake)| {
+            turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
                 let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
                 let addr = live_snakes.get(snake_index).unwrap().addr;
                 get_move(&client, &addr, game_state).map(|call_result| {
-                    call_result
+                    call_result.map(|api_move| api_move.decision).unwrap_or_else(|err| {
+                        warn!("Using default move for snakes[{}]: {}", snake_index, &err);
+                        snake.get_default_move()
+                    })
                 })
             })
         ).await;
 
-        // let dead_snake_indices = turn.advance(true, &snake_moves);
+        let dead_snake_indices = turn.advance(true, &snake_moves);
 
-        //notify dead snakes about /end
+        //todo: notify dead snakes about /end
+        if !dead_snake_indices.is_empty() {
+            info!("Snakes died: {:?}", &dead_snake_indices);
+            live_snakes = live_snakes.iter().enumerate()
+                .filter_map(|(i, ls)| if dead_snake_indices.contains(&i) {None} else {Some(*ls)})
+                .collect();
+        }
+
         turn_index += 1;
     }
 
