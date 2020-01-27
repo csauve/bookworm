@@ -1,4 +1,3 @@
-use std::sync::Mutex;
 use futures::{future, FutureExt};
 use log::*;
 use tokio_timer::Timeout;
@@ -10,8 +9,9 @@ use crate::game::snake::Snake;
 use crate::game::coord::UnitAbs;
 use crate::api::*;
 
-const START_TIMEOUT: u64 = 5000;
+const START_TIMEOUT_MS: u64 = 5000;
 
+#[derive(Clone)]
 struct LiveSnake {
     pub id: ApiSnakeId,
     pub addr: String,
@@ -22,30 +22,46 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
     let req = Request::post(format!("{}/start", addr))
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
-    match Timeout::new(client.request(req), Duration::from_millis(START_TIMEOUT)).await {
-        TimeoutErr => {
-            Err(format!("Snake @ {} timed out after {} ms", addr, START_TIMEOUT))
+    let k = Timeout::new(client.request(req), Duration::from_millis(START_TIMEOUT_MS));
+    match k.await {
+        Err(_) => {
+            Err(format!("Snake @ {} timed out after {} ms", addr, START_TIMEOUT_MS))
         },
         Ok(Err(e)) => {
             Err(format!("Snake @ {} failed to reply: {}", addr, e))
         },
         Ok(Ok(res)) => {
-            let res_body = res.into_body();
-            match serde_json::from_slice::<ApiSnakeConfig>(&body::to_bytes(res_body).await.unwrap()) {
-                Ok(snake_config) => Ok(snake_config),
-                Err(e) => {
-                    Err(format!("Snake @ {} responded with invalid JSON: {}", addr, e))
-                }
+            let res_body = body::to_bytes(res.into_body());
+            match serde_json::from_slice::<ApiSnakeConfig>(&res_body.await.unwrap()) {
+                Ok(start_response) => Ok(start_response),
+                Err(e) => Err(format!("Snake @ {} responded with invalid JSON: {}", addr, e))
             }
         }
     }
 }
 
-async fn get_move(client: &Client<HttpConnector>, addr: &str, game_state: ApiGameState) -> Result<ApiMove, String> {
-    //todo
+async fn get_move(client: &Client<HttpConnector>, addr: String, game_state: ApiGameState, timeout_ms: u64) -> Result<ApiMove, String> {
+    let req = Request::post(format!("{}/move", addr))
+        .body(Body::from(serde_json::to_string(&game_state).unwrap()))
+        .unwrap();
+    match Timeout::new(client.request(req), Duration::from_millis(timeout_ms)).await {
+        Err(_) => {
+            Err(format!("Snake @ {} timed out after {} ms", addr, timeout_ms))
+        },
+        Ok(Err(e)) => {
+            Err(format!("Snake @ {} failed to reply: {}", addr, e))
+        },
+        Ok(Ok(res)) => {
+            let res_body = body::to_bytes(res.into_body());
+            match serde_json::from_slice::<ApiMove>(&res_body.await.unwrap()) {
+                Ok(move_response) => Ok(move_response),
+                Err(e) => Err(format!("Snake @ {} responded with invalid JSON: {}", addr, e))
+            }
+        }
+    }
 }
 
-pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs) {
+pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs) {
     info!("Initializing {}x{} board", width, height);
     let mut turn = Turn::init(width, height, snakes_addrs.len()).unwrap();
     let mut turn_index: u32 = 0;
@@ -59,7 +75,7 @@ pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs,
             let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
             let addr_copy = addr.clone();
             //within the future, within the result, wrap their response in a LiveSnake
-            notify_start(&client, &addr, game_state).map(|call_result| {
+            notify_start(&client, &addr, game_state).map(move |call_result| {
                 call_result.map(|conf| {
                     LiveSnake {
                         id: Uuid::new_v4().to_string(),
@@ -78,15 +94,18 @@ pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs,
     let mut live_snakes = live_snakes.unwrap();
 
     while turn.snakes.len() > 1 {
+        draw_turn(&turn, turn_index);
+
         info!("Requesting moves for turn {}", turn_index);
         let snake_moves = future::join_all(
             turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
+                let default_move = snake.get_default_move();
                 let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
-                let addr = live_snakes.get(snake_index).unwrap().addr;
-                get_move(&client, &addr, game_state).map(|call_result| {
+                let addr_copy = live_snakes.get(snake_index).unwrap().addr.clone();
+                get_move(&client, addr_copy, game_state, timeout_ms).map(move |call_result| {
                     call_result.map(|api_move| api_move.decision).unwrap_or_else(|err| {
-                        warn!("Using default move for snakes[{}]: {}", snake_index, &err);
-                        snake.get_default_move()
+                        warn!("Using default move for snakes: {}", &err);
+                        default_move
                     })
                 })
             })
@@ -98,14 +117,19 @@ pub async fn run_game(_timeout_ms: u32, snakes_addrs: &[String], width: UnitAbs,
         if !dead_snake_indices.is_empty() {
             info!("Snakes died: {:?}", &dead_snake_indices);
             live_snakes = live_snakes.iter().enumerate()
-                .filter_map(|(i, ls)| if dead_snake_indices.contains(&i) {None} else {Some(*ls)})
+                .filter_map(|(i, ls)| if dead_snake_indices.contains(&i) {None} else {Some(ls.clone())})
                 .collect();
         }
 
         turn_index += 1;
     }
 
+    info!("Game has ended!");
     //notify winner (may be none if both died in final turn)
+}
+
+fn draw_turn(turn: &Turn, turn_index: u32) {
+    debug!("Turn {}: {} snakes", turn_index, turn.snakes.len());
 }
 
 fn build_api_game_state(turn: &Turn, snake_index: usize, turn_index: u32, game_id: &str) -> ApiGameState {

@@ -49,7 +49,7 @@ impl Turn {
             (7, 7) | (11, 11) | (19, 19) if num_snakes <= 8 => {
                 //the rules define 3 fixed board sizes with 8 fixed starting positions
                 let mn = 1 as Unit;
-                let md = (width - 1 / 2) as Unit;
+                let md = ((width - 1) / 2) as Unit;
                 let mx = (width - 2) as Unit;
                 let mut fixed_starts = [
                     Coord::new(mn, mn),
