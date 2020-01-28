@@ -1,9 +1,12 @@
+use std::iter;
+use std::time::Duration;
+use std::io;
 use futures::{future, FutureExt};
 use log::*;
-use tokio_timer::Timeout;
-use std::time::Duration;
+use tokio::time::timeout;
 use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
+use crate::game::coord::Coord;
 use crate::game::turn::Turn;
 use crate::game::snake::Snake;
 use crate::game::coord::UnitAbs;
@@ -22,7 +25,7 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
     let req = Request::post(format!("{}/start", addr))
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
-    let k = Timeout::new(client.request(req), Duration::from_millis(START_TIMEOUT_MS));
+    let k = timeout(Duration::from_millis(START_TIMEOUT_MS), client.request(req));
     match k.await {
         Err(_) => {
             Err(format!("Snake @ {} timed out after {} ms", addr, START_TIMEOUT_MS))
@@ -44,7 +47,7 @@ async fn get_move(client: &Client<HttpConnector>, addr: String, game_state: ApiG
     let req = Request::post(format!("{}/move", addr))
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
-    match Timeout::new(client.request(req), Duration::from_millis(timeout_ms)).await {
+    match timeout(Duration::from_millis(timeout_ms), client.request(req)).await {
         Err(_) => {
             Err(format!("Snake @ {} timed out after {} ms", addr, timeout_ms))
         },
@@ -61,7 +64,7 @@ async fn get_move(client: &Client<HttpConnector>, addr: String, game_state: ApiG
     }
 }
 
-pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs) {
+pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs, prompt: bool) {
     info!("Initializing {}x{} board", width, height);
     let mut turn = Turn::init(width, height, snakes_addrs.len()).unwrap();
     let mut turn_index: u32 = 0;
@@ -95,8 +98,11 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
 
     while turn.snakes.len() > 1 {
         draw_turn(&turn, turn_index);
+        if prompt {
+            wait_for_prompt();
+        }
 
-        info!("Requesting moves for turn {}", turn_index);
+        info!("Requesting moves for turn {}. Snakes have {} ms to respond", turn_index, timeout_ms);
         let snake_moves = future::join_all(
             turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
                 let default_move = snake.get_default_move();
@@ -117,7 +123,13 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
         if !dead_snake_indices.is_empty() {
             info!("Snakes died: {:?}", &dead_snake_indices);
             live_snakes = live_snakes.iter().enumerate()
-                .filter_map(|(i, ls)| if dead_snake_indices.contains(&i) {None} else {Some(ls.clone())})
+                .filter_map(|(i, ls)| {
+                    if dead_snake_indices.iter().any(|(d, _)| *d == i) {
+                        None
+                    } else {
+                        Some(ls.clone())
+                    }
+                })
                 .collect();
         }
 
@@ -129,7 +141,76 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
 }
 
 fn draw_turn(turn: &Turn, turn_index: u32) {
-    debug!("Turn {}: {} snakes", turn_index, turn.snakes.len());
+    let w = turn.width();
+    let h = turn.height();
+
+    let mut grid = iter::repeat_with(|| {
+        iter::repeat_with(|| {
+            String::from(" ")
+        }).take(w).collect::<Vec<_>>()
+    }).take(h).collect::<Vec<_>>();
+
+    for &Coord {x, y} in turn.food.iter() {
+        grid[y as usize][x as usize] = String::from("*");
+    }
+
+    for (i, snake) in turn.snakes.iter().enumerate() {
+        for &Coord {x, y} in snake.body.nodes.iter() {
+            grid[y as usize][x as usize] = format!("{}", i);
+        }
+    }
+
+    let mut buf = format!("Turn {}: {} snakes\n", turn_index, turn.snakes.len());
+    buf.push_str(&(0..=(w * 4)).map(|i| {
+        if i == 0 {
+            "┌"
+        } else if i == w * 4 {
+            "┐\n"
+        } else if i % 4 == 0 {
+            "┬"
+        } else {
+            "─"
+        }
+    }).collect::<String>());
+
+    for (i, row) in grid.iter().enumerate() {
+        if i != 0 {
+            buf.push_str(&(0..=(w * 4)).map(|i| {
+                if i == 0 {
+                    "├"
+                } else if i == w * 4 {
+                    "┤\n"
+                } else if i % 4 == 0 {
+                    "┼"
+                } else {
+                    "─"
+                }
+            }).collect::<String>());
+        }
+        buf.push_str("│ ");
+        buf.push_str(&row.join(" │ "));
+        buf.push_str(" │\n");
+    }
+
+    buf.push_str(&(0..=(w * 4)).map(|i| {
+        if i == 0 {
+            "└"
+        } else if i == w * 4 {
+            "┘"
+        } else if i % 4 == 0 {
+            "┴"
+        } else {
+            "─"
+        }
+    }).collect::<String>());
+
+    info!("{}", &buf);
+}
+
+fn wait_for_prompt() {
+    info!("Press [ENTER] to continue");
+    let mut input = String::new();
+    io::stdin().read_line(&mut input).unwrap();
 }
 
 fn build_api_game_state(turn: &Turn, snake_index: usize, turn_index: u32, game_id: &str) -> ApiGameState {

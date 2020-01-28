@@ -54,6 +54,12 @@ async fn main() {
                 .takes_value(true)
                 .default_value("500")
             )
+            .arg(Arg::with_name("prompt")
+                .short("p")
+                .help("Prompt for user input to continue each turn of the game")
+                .takes_value(false)
+                .required(false)
+            )
             .arg(Arg::with_name("width")
                 .short("w")
                 .help("Width of the game board")
@@ -91,7 +97,8 @@ async fn main() {
                 args.value_of("timeout").unwrap().parse().expect("Timeout must be numeric"),
                 &args.values_of("snake").expect("At least one snake is needed").map(String::from).collect::<Vec<_>>(),
                 args.value_of("width").unwrap().parse().expect("Width must be numeric"),
-                args.value_of("height").unwrap().parse().expect("Height must be numeric")
+                args.value_of("height").unwrap().parse().expect("Height must be numeric"),
+                args.is_present("prompt")
             ).await;
         }
         ("benchmark", _) => {

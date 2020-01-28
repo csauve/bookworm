@@ -3,7 +3,7 @@ pub mod offset;
 pub mod path;
 pub mod snake;
 pub mod turn;
-mod util;
+pub mod util;
 
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
@@ -42,9 +42,9 @@ fn heuristic(turn: &Turn) -> Score {
     let you_score = indiv_scores[0];
     let enemy_score_sum = indiv_scores.iter().skip(1).fold(0.0, |sum, s| sum + s);
     if indiv_scores.len() <= 2 {
-        you_score - enemy_score_sum
+        you_score - enemy_score_sum + 0.1
     } else {
-        you_score - enemy_score_sum / (indiv_scores.len() as Score - 1.0)
+        you_score - enemy_score_sum / (indiv_scores.len() as Score - 1.0) + 0.1
     }
 }
 
@@ -79,7 +79,7 @@ fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
             let mut next_turn = turn.clone();
             let you_move = moves[0];
             let dead_snake_indices = next_turn.advance(false, moves);
-            if dead_snake_indices.contains(&0) {
+            if dead_snake_indices.iter().any(|(d, _)| *d == 0) {
                 (0.0, vec![you_move])
             } else {
                 let (score, mut path) = evaluate_turn(&next_turn, max_depth - 1);

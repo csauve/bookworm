@@ -260,8 +260,8 @@ impl Turn {
     }
 
     //Applies known game rules to the turn, returning indices of snakes that died
-    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashSet<usize> {
-        let mut eaten_food_indices: HashSet<usize> = HashSet::new();
+    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashSet<(usize, &'static str)> {
+        let mut eaten_food: HashSet<usize> = HashSet::new();
 
         //move snakes and find eaten food
         for snake_index in 0..self.snakes.len() {
@@ -270,51 +270,57 @@ impl Turn {
             if let Some(food_index) = self.find_food(self.snakes[snake_index].head()) {
                 //all snakes get a chance to eat fairly before food is removed
                 self.snakes[snake_index].feed(SNAKE_MAX_HEALTH);
-                eaten_food_indices.insert(food_index);
+                eaten_food.insert(food_index);
             }
         }
 
-        let dead_snake_indices = self.snakes.iter().enumerate().filter_map(|(snake_index, snake)| {
+        let dead_snakes = self.snakes.iter().enumerate().filter_map(|(snake_index, snake)| {
             if snake.starved() {
-                return Some(snake_index);
+                return Some((snake_index, "starved"));
             }
             if !snake.head().bounded_by(ORIGIN, self.bound) {
-                return Some(snake_index);
+                return Some((snake_index, "out of bounds"));
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
                 if let Some(i) = other_snake.find_first_node(snake.head()) {
                     if i > 0 || (other_snake_index != snake_index && snake.size() <= other_snake.size()) {
                         //TWO SNAKES ENTER, ONE SNAKE LEAVES (Ok, actually neither may leave)
-                        return Some(snake_index);
+                        return Some((snake_index, "collision"));
                     }
                 }
             }
             None
-        }).collect::<HashSet<usize>>();
+        }).collect::<HashSet<(usize, &'static str)>>();
 
         //clean up
-        if !eaten_food_indices.is_empty() {
+        if !eaten_food.is_empty() {
             self.food = self.food.iter().enumerate()
-                .filter_map(|(i, f)| if eaten_food_indices.contains(&i) {None} else {Some(*f)})
+                .filter_map(|(i, f)| if eaten_food.contains(&i) {None} else {Some(*f)})
                 .collect();
         }
-        if !dead_snake_indices.is_empty() {
+        if !dead_snakes.is_empty() {
             self.snakes = self.snakes.iter().enumerate()
-                .filter_map(|(i, s)| if dead_snake_indices.contains(&i) {None} else {Some(s.clone())})
+                .filter_map(|(i, s)| {
+                    if dead_snakes.iter().any(|(d, _)| *d == i) {
+                        None
+                    } else {
+                        Some(s.clone())
+                    }
+                })
                 .collect();
         }
 
         if spawn_food {
             let mut rng = rand::thread_rng();
-            if rng.next_u32() <= FOOD_SPAWN_CHANCE {
-                let mut free_spaces: Vec<Coord> = Vec::from_iter(
+            if rng.gen_range(0, 100) <= FOOD_SPAWN_CHANCE {
+                let free_spaces: Vec<Coord> = Vec::from_iter(
                     cartesian_product(&[
                         (0..self.width() as Unit).collect(),
                         (0..self.height() as Unit).collect()
                     ]).iter().filter_map(|v| {
                         let coord = Coord::new(v[0], v[1]);
                         for snake in self.snakes.iter() {
-                            if let Some(_) = snake.find_first_node(coord) {
+                            if snake.find_first_node(coord).is_some() {
                                 return None;
                             }
                         }
@@ -325,7 +331,7 @@ impl Turn {
             }
         }
 
-        dead_snake_indices
+        dead_snakes
     }
 
     pub fn you(&self) -> &Snake {
@@ -438,6 +444,6 @@ mod tests {
         ");
         assert_eq!(prev.you().size(), 9);
         assert_eq!(next.snakes.len(), 0);
-        assert!(result.contains(&0));
+        assert!(!result.is_empty());
     }
 }
