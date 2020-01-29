@@ -114,20 +114,6 @@ impl Path {
     pub fn get_node(&self, index: usize) -> Option<Coord> {
         self.nodes.get(index).cloned()
     }
-
-    //todo: maybe won't need this code
-    pub fn intersects(&self, coord: Coord) -> bool {
-        !self.nodes.is_empty() && (
-            //check the start and end first since they're likely to be common intersection points
-            self.start().unwrap() == coord ||
-            self.end().unwrap() == coord ||
-            self.nodes.windows(2).any(|pair| {coord.bounded_by(pair[0], pair[1])})
-        )
-    }
-
-    pub fn contains_node(&self, coord: Coord) -> bool {
-        self.nodes.contains(&coord)
-    }
 }
 
 #[macro_export]
@@ -250,31 +236,6 @@ mod tests {
             (5, 5), //stacked
             (5, 5),
         ]);
-    }
-
-    #[test]
-    fn test_intersects() {
-        let mut path = path![
-            (0, 0),
-        ];
-
-        assert!(path.intersects(Coord::new(0, 0)));
-        assert!(!path.intersects(Coord::new(1, 0)));
-
-        let path = path![
-            (0, 0),
-            (10, 0),
-            (10, 10),
-            (20, 20),
-        ];
-
-        assert!(path.intersects(Coord::new(5, 0)));
-        assert!(!path.intersects(Coord::new(5, 1)));
-        assert!(path.intersects(Coord::new(10, 5)));
-        assert!(path.intersects(Coord::new(10, 10)));
-        assert!(path.intersects(Coord::new(15, 15)));
-        assert!(path.intersects(Coord::new(20, 20)));
-        assert!(!path.intersects(Coord::new(20, 21)));
     }
 
     #[test]

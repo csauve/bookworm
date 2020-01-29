@@ -1,5 +1,4 @@
 use std::iter;
-use std::convert::TryFrom;
 use std::cmp::{Ord, Ordering, Eq, PartialEq, PartialOrd};
 use std::collections::{HashSet, HashMap, BinaryHeap};
 use std::sync::Mutex;
@@ -9,7 +8,7 @@ use rand::seq::SliceRandom;
 use std::iter::FromIterator;
 use rayon::prelude::*;
 use crate::api::{ApiGameState, ApiDirection};
-use super::util::cartesian_product;
+use crate::util::cartesian_product;
 use super::snake::{Snake, Health};
 use super::coord::{Coord, Unit, UnitAbs};
 use super::path::Path;
@@ -159,7 +158,7 @@ impl Board {
                 if (new_coord - snake.head()).manhattan_dist() > snake.size() {
                     //can save a little time ruling out snakes which are too far away
                     true
-                } else if let Some(i) = snake.find_first_node(new_coord) {
+                } else if let Some(i) = snake.find_first_node(new_coord, 0) {
                     //finding the "first" node is key to avoiding moving into stacked tail coords
                     //its safe to move into another snake if that node will be gone in n_turns
                     i >= snake.size().saturating_sub(n_turns)
@@ -176,9 +175,9 @@ impl Board {
     }
 
     //todo: try returning distance only
-    //A* pathfinding, taking into account snake tail movements
+    //A* pathfinding
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
-        //todo: try using a std::collections::BinaryHeap for open set
+        //heap keeps open set sorted by best f_score
         let mut frontier: BinaryHeap<FrontierCoord> = BinaryHeap::new();
         //keeping known dists and breadcrumbs together in one tuple reduces hash operations
         let mut history: HashMap<Coord, (UnitAbs, Option<Coord>)> = HashMap::new();
@@ -186,7 +185,7 @@ impl Board {
         frontier.push(FrontierCoord(from, (to - from).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT));
         history.insert(from, (0, None));
 
-        //todo: g(i) tiebreaking https://movingai.com/astar.html
+        //todo: g_score tiebreaking may improve perf https://movingai.com/astar.html
         while let Some(FrontierCoord(leader, _leader_f_score)) = frontier.pop() {
             if leader == to {
                 let mut nodes = vec![leader];
@@ -197,6 +196,8 @@ impl Board {
             }
 
             let leader_g_score = history.get(&leader).map(|hist| hist.0).unwrap_or(0);
+
+            //use g_score as number of turns in the future so we can shorten snake tails
             let free_spaces = self.get_free_moves(leader, leader_g_score).iter()
                 .map(|dir| leader + (*dir).into())
                 .collect::<Vec<_>>();
@@ -296,14 +297,20 @@ impl Board {
                 return Some((snake_index, "starved"));
             }
             if !snake.head().bounded_by(ORIGIN, self.bound) {
-                return Some((snake_index, "out of bounds"));
+                return Some((snake_index, "out-of-bounds"));
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
-                if let Some(i) = other_snake.find_first_node(snake.head()) {
-                    if i > 0 || (other_snake_index != snake_index && snake.size() <= other_snake.size()) {
-                        //TWO SNAKES ENTER, ONE SNAKE LEAVES (Ok, actually neither may leave)
-                        return Some((snake_index, "collision"));
+                if other_snake_index != snake_index {
+                    if let Some(i) = other_snake.find_first_node(snake.head(), 0) {
+                        if i > 0 {
+                            return Some((snake_index, "other-collision"));
+                        } else if snake.size() <= other_snake.size() {
+                            //TWO SNAKES ENTER, ONE SNAKE LEAVES (Ok, actually neither may leave)
+                            return Some((snake_index, "head-to-head"));
+                        }
                     }
+                } else if other_snake.find_first_node(snake.head(), 1).is_some() {
+                    return Some((snake_index, "self-collision"));
                 }
             }
             None
@@ -337,7 +344,7 @@ impl Board {
                     ]).iter().filter_map(|v| {
                         let coord = Coord::new(v[0], v[1]);
                         for snake in self.snakes.iter() {
-                            if snake.find_first_node(coord).is_some() {
+                            if snake.find_first_node(coord, 0).is_some() {
                                 return None;
                             }
                         }
@@ -434,7 +441,7 @@ mod tests {
         ");
 
         //the Y snake didn't hit any walls
-        assert!(result.is_empty());
+        assert_eq!(result.len(), 1);
         //no food was eaten
         assert_eq!(prev.food, next.food);
         assert_eq!(prev.food, next.food);

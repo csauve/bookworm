@@ -65,9 +65,9 @@ impl Snake {
         self.health == 0
     }
 
-    pub fn find_first_node(&self, loc: Coord) -> Option<usize> {
+    pub fn find_first_node(&self, loc: Coord, offset: usize) -> Option<usize> {
         //maintaing a bounding rectangle did NOT speed this up
-        self.body.nodes.iter().position(|node| loc == *node)
+        self.body.nodes.iter().skip(offset).position(|node| loc == *node)
     }
 
     pub fn feed(&mut self, new_health: Health) {

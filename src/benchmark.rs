@@ -1,10 +1,8 @@
 use std::str;
 use std::time::{SystemTime};
 use log::*;
-use crate::game::path::Path;
-use crate::game::coord::Coord;
-use crate::game::offset::Offset;
-use crate::game::{board::Board, get_decision};
+use crate::game::{Path, Coord, Offset, Board};
+use crate::brain::get_decision;
 use crate::api::{ApiDirection::*, ApiGameState};
 
 macro_rules! timed {
@@ -17,7 +15,7 @@ macro_rules! timed {
     ($name:expr, $n:expr, $code:expr) => ({
         let start = SystemTime::now();
         for i in 0..$n {
-            $code(i);
+            let _ = $code(i);
         }
         let duration = SystemTime::now().duration_since(start).unwrap().as_nanos() / $n;
         info!("{}: {} ns (avg. of {})", $name, fmt_int(duration), fmt_int($n as u128));
@@ -71,7 +69,7 @@ fn board() {
         let _path = board.pathfind(board.you().head(), Coord::new(11, 11));
     });
 
-    timed!("territories", 1_000, {
+    timed!("territories", 1_000, |_| {
         let _territories = board.get_territories();
     });
 }

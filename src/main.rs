@@ -3,6 +3,8 @@ mod game;
 mod server;
 mod host;
 mod benchmark;
+mod util;
+mod brain;
 
 use log::*;
 use clap::{App, Arg, SubCommand};

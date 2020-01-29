@@ -6,10 +6,7 @@ use log::*;
 use tokio::time::timeout;
 use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
-use crate::game::coord::Coord;
-use crate::game::board::Board;
-use crate::game::snake::Snake;
-use crate::game::coord::UnitAbs;
+use crate::game::{Coord, Board, Snake, UnitAbs};
 use crate::api::*;
 
 const START_TIMEOUT_MS: u64 = 5000;

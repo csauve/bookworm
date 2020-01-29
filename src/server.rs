@@ -4,7 +4,7 @@ use std::time::{SystemTime};
 use log::*;
 use hyper::{Body, Request, Response, Server, Method, StatusCode, body, service::{make_service_fn, service_fn}};
 use crate::api::{ApiSnakeConfig, ApiMove};
-use crate::game::get_decision;
+use crate::brain::get_decision;
 
 pub async fn start_server(ip: IpAddr, port: u16) {
     let addr = SocketAddr::new(ip, port);
