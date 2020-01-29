@@ -29,6 +29,31 @@ impl Path {
         Path::from_vec(mapped_coords)
     }
 
+    //(min, max)
+    pub fn get_bounds(&self) -> Option<(Coord, Coord)> {
+        if self.nodes.is_empty() {
+            None
+        } else {
+            let Coord {x: mut min_x, y: mut min_y} = *self.nodes.first().unwrap();
+            let Coord {x: mut max_x, y: mut max_y} = *self.nodes.first().unwrap();
+            for &Coord {x, y} in self.nodes.iter().skip(1) {
+                if x < min_x {
+                    min_x = x;
+                }
+                if x > max_x {
+                    max_x = x;
+                }
+                if y < min_y {
+                    min_y = y;
+                }
+                if y > max_y {
+                    max_y = y;
+                }
+            }
+            Some((Coord {x: min_x, y: min_y}, Coord {x: max_x, y: max_y}))
+        }
+    }
+
     pub fn slide_start(&mut self, offset: Offset) {
         self.extend_start(offset);
         self.pop_end();

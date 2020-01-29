@@ -22,7 +22,7 @@ const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, Api
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Turn {
+pub struct Board {
     //must contain at least 1 snake (the `you` snake, at index 0)
     pub snakes: Vec<Snake>,
     pub food: Vec<Coord>,
@@ -34,9 +34,8 @@ pub struct Territory {
     pub food: Vec<Path>,
 }
 
-//todo: rename to board
-impl Turn {
-    pub fn init(width: UnitAbs, height: UnitAbs, num_snakes: usize) -> Result<Turn, &'static str> {
+impl Board {
+    pub fn init(width: UnitAbs, height: UnitAbs, num_snakes: usize) -> Result<Board, &'static str> {
         let mut rng = rand::thread_rng();
         let mut free_spaces: Vec<Coord> = Vec::from_iter(
             cartesian_product(&[
@@ -89,7 +88,7 @@ impl Turn {
             }
         });
 
-        Ok(Turn {
+        Ok(Board {
             snakes,
             food: food_spawner
                 .take_while(Option::is_some)
@@ -103,8 +102,8 @@ impl Turn {
         })
     }
 
-    pub fn from_api(game_state: &ApiGameState) -> Turn {
-        Turn {
+    pub fn from_api(game_state: &ApiGameState) -> Board {
+        Board {
             snakes: iter::once(&game_state.you)
                 .chain(game_state.board.snakes.iter())
                 .map(|s| Snake::from_api(s).unwrap())
@@ -118,7 +117,7 @@ impl Turn {
     }
 
     //note -- hash key elements must are ordered such that key.0 < key.1
-    //todo: this actually slowed down evaluate_turn when used for pruning... can it be useful elsewhere?
+    //todo: this actually slowed down evaluate_board when used for pruning... can it be useful elsewhere?
     pub fn get_snake_dist_matrix(&self) -> HashMap<(usize, usize), UnitAbs> {
         let mut results = HashMap::new();
         for (a, snake_a) in self.snakes.iter().enumerate() {
@@ -259,7 +258,7 @@ impl Turn {
         territories.into_inner().unwrap()
     }
 
-    //Applies known game rules to the turn, returning indices of snakes that died
+    //Applies known game rules to the board, returning indices of snakes that died
     pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashSet<(usize, &'static str)> {
         let mut eaten_food: HashSet<usize> = HashSet::new();
 
@@ -362,13 +361,9 @@ impl Turn {
     fn find_food(&self, coord: Coord) -> Option<usize> {
         self.food.iter().position(|&food| food == coord)
     }
-
-    pub fn infer_you_move(prev_turn: &Turn, next_turn: &Turn) -> Result<ApiDirection, &'static str> {
-        ApiDirection::try_from(next_turn.you().head() - prev_turn.you().head())
-    }
 }
 
-impl fmt::Display for Turn {
+impl fmt::Display for Board {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "()")
     }
@@ -384,7 +379,7 @@ mod tests {
         ($moves:expr, $curr:expr) => (
             {
                 let game_state = ApiGameState::parse_basic($curr);
-                let prev = Turn::from_api(&game_state);
+                let prev = Board::from_api(&game_state);
                 let mut next = prev.clone();
                 let result = next.advance(false, $moves);
                 (prev, next, result)
@@ -402,12 +397,12 @@ mod tests {
         |  |  |  |
         ");
 
-        let turn = Turn::from_api(&api_game);
-        assert_eq!(turn.food, vec![Coord::new(1, 0)]);
-        assert_eq!(turn.enemies()[0].head(), Coord::new(0, 2));
-        assert_eq!(turn.enemies()[0].tail(), Coord::new(1, 3));
-        assert_eq!(turn.you().head(), Coord::new(2, 1));
-        assert_eq!(turn.you().tail(), Coord::new(2, 2));
+        let board = Board::from_api(&api_game);
+        assert_eq!(board.food, vec![Coord::new(1, 0)]);
+        assert_eq!(board.enemies()[0].head(), Coord::new(0, 2));
+        assert_eq!(board.enemies()[0].tail(), Coord::new(1, 3));
+        assert_eq!(board.you().head(), Coord::new(2, 1));
+        assert_eq!(board.you().tail(), Coord::new(2, 2));
     }
 
     #[test]

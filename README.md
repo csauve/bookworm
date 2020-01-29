@@ -21,7 +21,6 @@ Unit tests can be run with `cargo test`, though some strategy tests will fail cu
 * Troubleshoot snake's tendency to die in head-on collisions
 * Implement more unit tests for behaviour; fix the failing ones
 * Self-monitor performance and latency, dynamically tune lookahead depth to best utilize 500 ms allowance
-* Maintain bounding rectangles for each snake to speed up hit/free move checks
 * Supposedly `if let Some(x) = vec.get(i)` is faster than `vec[i]`?
 * Look for opportunities to use [infallible DS][3] to avoid empty checks
 * Use Jump Point Search to improve performance of pathfinding

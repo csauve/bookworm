@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
 use crate::game::coord::Coord;
-use crate::game::turn::Turn;
+use crate::game::board::Board;
 use crate::game::snake::Snake;
 use crate::game::coord::UnitAbs;
 use crate::api::*;
@@ -66,8 +66,8 @@ async fn get_move(client: &Client<HttpConnector>, addr: String, game_state: ApiG
 
 pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, height: UnitAbs, prompt: bool) {
     info!("Initializing {}x{} board", width, height);
-    let mut turn = Turn::init(width, height, snakes_addrs.len()).unwrap();
-    let mut turn_index: u32 = 0;
+    let mut board = Board::init(width, height, snakes_addrs.len()).unwrap();
+    let mut turn: u32 = 0;
     let game_id: ApiGameId = Uuid::new_v4().to_string();
     let client = Client::default();
 
@@ -75,7 +75,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
     let live_snakes = future::try_join_all(
         //build an iterator of futures representing results of /start API call
         snakes_addrs.iter().enumerate().map(|(snake_index, addr)| {
-            let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
+            let game_state = build_api_game_state(&board, snake_index, turn, &game_id);
             let addr_copy = addr.clone();
             //within the future, within the result, wrap their response in a LiveSnake
             notify_start(&client, &addr, game_state).map(move |call_result| {
@@ -96,17 +96,17 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
     }
     let mut live_snakes = live_snakes.unwrap();
 
-    while turn.snakes.len() > 1 {
-        draw_turn(&turn, turn_index);
+    while board.snakes.len() > 1 {
+        draw_board(&board, turn);
         if prompt {
             wait_for_prompt();
         }
 
-        info!("Requesting moves for turn {}. Snakes have {} ms to respond", turn_index, timeout_ms);
+        info!("Requesting moves for turn {}. Snakes have {} ms to respond", turn, timeout_ms);
         let snake_moves = future::join_all(
-            turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
+            board.snakes.iter().enumerate().map(|(snake_index, snake)| {
                 let default_move = snake.get_default_move();
-                let game_state = build_api_game_state(&turn, snake_index, turn_index, &game_id);
+                let game_state = build_api_game_state(&board, snake_index, turn, &game_id);
                 let addr_copy = live_snakes.get(snake_index).unwrap().addr.clone();
                 get_move(&client, addr_copy, game_state, timeout_ms).map(move |call_result| {
                     call_result.map(|api_move| api_move.decision).unwrap_or_else(|err| {
@@ -117,7 +117,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
             })
         ).await;
 
-        let dead_snake_indices = turn.advance(true, &snake_moves);
+        let dead_snake_indices = board.advance(true, &snake_moves);
 
         //todo: notify dead snakes about /end
         if !dead_snake_indices.is_empty() {
@@ -133,16 +133,16 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
                 .collect();
         }
 
-        turn_index += 1;
+        turn += 1;
     }
 
     info!("Game has ended!");
     //notify winner (may be none if both died in final turn)
 }
 
-fn draw_turn(turn: &Turn, turn_index: u32) {
-    let w = turn.width();
-    let h = turn.height();
+fn draw_board(board: &Board, turn: u32) {
+    let w = board.width();
+    let h = board.height();
 
     let mut grid = iter::repeat_with(|| {
         iter::repeat_with(|| {
@@ -150,17 +150,17 @@ fn draw_turn(turn: &Turn, turn_index: u32) {
         }).take(w).collect::<Vec<_>>()
     }).take(h).collect::<Vec<_>>();
 
-    for &Coord {x, y} in turn.food.iter() {
+    for &Coord {x, y} in board.food.iter() {
         grid[y as usize][x as usize] = String::from("*");
     }
 
-    for (i, snake) in turn.snakes.iter().enumerate() {
+    for (i, snake) in board.snakes.iter().enumerate() {
         for &Coord {x, y} in snake.body.nodes.iter() {
             grid[y as usize][x as usize] = format!("{}", i);
         }
     }
 
-    let mut buf = format!("Turn {}: {} snakes\n", turn_index, turn.snakes.len());
+    let mut buf = format!("Turn {}: {} snakes\n", turn, board.snakes.len());
     buf.push_str(&(0..=(w * 4)).map(|i| {
         if i == 0 {
             "┌"
@@ -213,15 +213,15 @@ fn wait_for_prompt() {
     io::stdin().read_line(&mut input).unwrap();
 }
 
-fn build_api_game_state(turn: &Turn, snake_index: usize, turn_index: u32, game_id: &str) -> ApiGameState {
+fn build_api_game_state(board: &Board, snake_index: usize, turn: u32, game_id: &str) -> ApiGameState {
     ApiGameState {
         game: ApiGame {id: String::from(game_id)},
-        turn: turn_index,
+        turn,
         board: ApiBoard {
-            height: turn.height() as u32,
-            width: turn.width() as u32,
-            food: turn.food.iter().map(ApiCoords::from).collect(),
-            snakes: turn.snakes.iter()
+            height: board.height() as u32,
+            width: board.width() as u32,
+            food: board.food.iter().map(ApiCoords::from).collect(),
+            snakes: board.snakes.iter()
                 .enumerate()
                 .filter_map(|(i, snake)| {
                     if i != snake_index {
@@ -232,7 +232,7 @@ fn build_api_game_state(turn: &Turn, snake_index: usize, turn_index: u32, game_i
                 })
                 .collect()
         },
-        you: build_api_snake(turn.snakes.get(snake_index).unwrap(), "id", "name"),
+        you: build_api_snake(board.snakes.get(snake_index).unwrap(), "id", "name"),
     }
 }
 

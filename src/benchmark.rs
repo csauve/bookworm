@@ -4,7 +4,7 @@ use log::*;
 use crate::game::path::Path;
 use crate::game::coord::Coord;
 use crate::game::offset::Offset;
-use crate::game::{turn::Turn, get_decision};
+use crate::game::{board::Board, get_decision};
 use crate::api::{ApiDirection::*, ApiGameState};
 
 macro_rules! timed {
@@ -42,11 +42,11 @@ fn fmt_int(integer: u128) -> String {
 
 pub fn run_benchmark() {
     path_slide();
-    turn();
+    board();
     decision();
 }
 
-fn turn() {
+fn board() {
     let game_state = ApiGameState::parse_basic("
     |  |  |  |  |  |  |  |  |  |  |()|  |
     |  |B2|B1|  |  |C2|C1|  |  |D1|D2|  |
@@ -61,18 +61,18 @@ fn turn() {
     |  |Y2|Y1|  |  |  |G1|G2|  |  |F2|  |
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
-    let turn = Turn::from_api(&game_state);
+    let board = Board::from_api(&game_state);
 
     timed!("get_free_moves", 1_000, |_| {
-        turn.get_free_snake_moves()
+        board.get_free_snake_moves()
     });
 
-    timed!("pathfind", 100, |_| {
-        let _path = turn.pathfind(turn.you().head(), Coord::new(11, 11));
+    timed!("pathfind", 1_000, |_| {
+        let _path = board.pathfind(board.you().head(), Coord::new(11, 11));
     });
 
-    timed!("territories", {
-        let _territories = turn.get_territories();
+    timed!("territories", 1_000, {
+        let _territories = board.get_territories();
     });
 }
 
@@ -92,7 +92,25 @@ fn decision() {
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
 
-    timed!("get_decision", 10, |_| {
+    timed!("get_decision_early_game", 100, |_| {
+        get_decision(&game_state);
+    });
+
+    let game_state = ApiGameState::parse_basic("
+    |   |   |   |   |A17|   |   |   |   |   |() |
+    |   |   |   |   |A16|   |   |   |   |   |   |
+    |   |   |   |   |A15|A14|A13|A12|   |   |   |
+    |Y6 |Y5 |Y4 |Y3 |   |   |   |A11|   |   |   |
+    |Y7 |   |   |Y2 |   |   |   |A10|   |   |   |
+    |Y8 |   |   |Y1 |   |   |   |A9 |   |   |   |
+    |Y9 |Y10|Y11|Y0 |   |   |A7 |A8 |   |   |   |
+    |   |   |   |   |A0 |   |A6 |   |   |   |   |
+    |   |   |   |   |A1 |   |A5 |   |   |   |   |
+    |   |   |   |   |A2 |A3 |A4 |   |   |   |   |
+    |   |() |   |   |   |   |   |   |   |   |() |
+    ");
+
+    timed!("get_decision_late_game", 100, |_| {
         get_decision(&game_state);
     });
 }

@@ -18,7 +18,7 @@ impl Snake {
     pub fn init(health: Health, start: Coord, size: usize) -> Snake {
         Snake {
             health,
-            body: Path::from_vec(iter::repeat(start).take(size).collect())
+            body: Path::from_vec(iter::repeat(start).take(size).collect()),
         }
     }
 
@@ -26,9 +26,10 @@ impl Snake {
         if api_snake.body.is_empty() {
             return Err("Malformed snake: body is empty")
         }
+        let body = Path::from_api(&api_snake.body);
         Ok(Snake {
             health: api_snake.health as Health,
-            body: Path::from_api(&api_snake.body),
+            body,
         })
     }
 
@@ -49,6 +50,7 @@ impl Snake {
     }
 
     //returns the next distinct node after the head, if there is one
+    #[inline]
     pub fn neck(&self) -> Option<Coord> {
         self.body.get_node(1)
     }
@@ -64,6 +66,7 @@ impl Snake {
     }
 
     pub fn find_first_node(&self, loc: Coord) -> Option<usize> {
+        //maintaing a bounding rectangle did NOT speed this up
         self.body.nodes.iter().position(|node| loc == *node)
     }
 

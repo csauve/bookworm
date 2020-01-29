@@ -2,13 +2,13 @@ pub mod coord;
 pub mod offset;
 pub mod path;
 pub mod snake;
-pub mod turn;
+pub mod board;
 pub mod util;
 
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
 use coord::UnitAbs;
-use turn::{Turn};
+use board::{Board};
 use util::cartesian_product;
 
 //these numbers are weak!!! time to optimize moar
@@ -19,23 +19,23 @@ const MIN_PRIORITY_SNAKES: UnitAbs = 1;
 type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
-    let root_turn = Turn::from_api(game_state);
-    let (score, path) = evaluate_turn(&root_turn, MAX_LOOKAHEAD_DEPTH);
+    let root_turn_board = Board::from_api(game_state);
+    let (score, path) = evaluate_board(&root_turn_board, MAX_LOOKAHEAD_DEPTH);
     debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
-    path.first().cloned().unwrap_or_else(|| root_turn.you().get_default_move())
+    path.first().cloned().unwrap_or_else(|| root_turn_board.you().get_default_move())
 }
 
-fn heuristic(turn: &Turn) -> Score {
-    let territories = turn.get_territories();
-    let indiv_scores = turn.snakes.iter().enumerate().map(|(snake_index, snake)| {
+fn heuristic(board: &Board) -> Score {
+    let territories = board.get_territories();
+    let indiv_scores = board.snakes.iter().enumerate().map(|(snake_index, snake)| {
         let territory = territories.get(snake_index).unwrap();
         //todo: tune heuristics (e.g. prevent from being too big)
-        let h_control = territory.area as Score / turn.area() as Score;
+        let h_control = territory.area as Score / board.area() as Score;
         let h_food = snake.health as Score / 100.0;
-        let h_head_to_head = turn.snakes.iter().enumerate()
+        let h_head_to_head = board.snakes.iter().enumerate()
             .filter(|(other_index, other)| *other_index == snake_index || snake.size() > other.size())
             .count() as Score /
-            turn.snakes.len() as Score;
+            board.snakes.len() as Score;
         h_food * h_head_to_head * h_control
     }).collect::<Vec<_>>();
 
@@ -50,18 +50,18 @@ fn heuristic(turn: &Turn) -> Score {
 
 //todo: use a deadline instead of max_depth?
 //assumes the "you" index is 0 to avoid reshuffling complexity
-fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
+fn evaluate_board(board: &Board, max_depth: u8) -> (Score, Vec<ApiDirection>) {
     if max_depth == 0 {
-        return (heuristic(turn), Vec::new());
+        return (heuristic(board), Vec::new());
     }
 
     //it's impractical to explore the entire turn tree, so filter moves out.
     //also ensure every snake makes at least their default move
-    let moves_to_explore = turn.get_free_snake_moves().iter().enumerate()
+    let moves_to_explore = board.get_free_snake_moves().iter().enumerate()
         .map(|(i, moves)| {
-            let default_move = turn.snakes[i].get_default_move();
+            let default_move = board.snakes[i].get_default_move();
             let is_priority_snake = i < MIN_PRIORITY_SNAKES ||
-                (turn.snakes[i].head() - turn.you().head()).manhattan_dist() <= PRIORITY_DIST;
+                (board.snakes[i].head() - board.you().head()).manhattan_dist() <= PRIORITY_DIST;
             if moves.is_empty() {
                 vec![default_move]
             } else if is_priority_snake {
@@ -76,13 +76,13 @@ fn evaluate_turn(turn: &Turn, max_depth: u8) -> (Score, Vec<ApiDirection>) {
 
     cartesian_product(&moves_to_explore).iter()
         .map(|moves| {
-            let mut next_turn = turn.clone();
+            let mut next_turn_board = board.clone();
             let you_move = moves[0];
-            let dead_snake_indices = next_turn.advance(false, moves);
+            let dead_snake_indices = next_turn_board.advance(false, moves);
             if dead_snake_indices.iter().any(|(d, _)| *d == 0) {
                 (0.0, vec![you_move])
             } else {
-                let (score, mut path) = evaluate_turn(&next_turn, max_depth - 1);
+                let (score, mut path) = evaluate_board(&next_turn_board, max_depth - 1);
                 path.insert(0, you_move);
                 (score, path)
             }
