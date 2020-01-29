@@ -24,10 +24,6 @@ Unit tests can be run with `cargo test`, though some strategy tests will fail cu
 * Supposedly `if let Some(x) = vec.get(i)` is faster than `vec[i]`?
 * Look for opportunities to use [infallible DS][3] to avoid empty checks
 * Use Jump Point Search to improve performance of pathfinding
-* Improve these hot paths from profiling:
-  * Making hashes
-  * Pathfinding
-  * Min by key
 
 ## Resources
 

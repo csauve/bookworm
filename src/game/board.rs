@@ -1,6 +1,7 @@
 use std::iter;
 use std::convert::TryFrom;
-use std::collections::{HashSet, HashMap};
+use std::cmp::{Ord, Ordering, Eq, PartialEq, PartialOrd};
+use std::collections::{HashSet, HashMap, BinaryHeap};
 use std::sync::Mutex;
 use std::fmt;
 use rand::prelude::*;
@@ -32,6 +33,27 @@ pub struct Board {
 pub struct Territory {
     pub area: UnitAbs,
     pub food: Vec<Path>,
+}
+
+#[derive(Eq)]
+struct FrontierCoord(Coord, UnitAbs);
+
+impl Ord for FrontierCoord {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.1.cmp(&other.1).reverse() //we want a min heap
+    }
+}
+
+impl PartialOrd for FrontierCoord {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for FrontierCoord {
+    fn eq(&self, other: &Self) -> bool {
+        self.1 == other.1
+    }
 }
 
 impl Board {
@@ -157,19 +179,15 @@ impl Board {
     //A* pathfinding, taking into account snake tail movements
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
         //todo: try using a std::collections::BinaryHeap for open set
-        let mut frontier: HashSet<Coord> = HashSet::new();
+        let mut frontier: BinaryHeap<FrontierCoord> = BinaryHeap::new();
         //keeping known dists and breadcrumbs together in one tuple reduces hash operations
         let mut history: HashMap<Coord, (UnitAbs, Option<Coord>)> = HashMap::new();
-        frontier.insert(from);
+        //static weighting: https://en.wikipedia.org/wiki/A*_search_algorithm#Bounded_relaxation
+        frontier.push(FrontierCoord(from, (to - from).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT));
         history.insert(from, (0, None));
 
-        while !frontier.is_empty() {
-            //todo: g(i) tiebreaking https://movingai.com/astar.html
-            let leader = *frontier.iter().min_by_key(|&coord| {
-                //static weighting: https://en.wikipedia.org/wiki/A*_search_algorithm#Bounded_relaxation
-                history.get(coord).map(|hist| hist.0).unwrap_or(0) + (to - *coord).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT
-            }).unwrap();
-
+        //todo: g(i) tiebreaking https://movingai.com/astar.html
+        while let Some(FrontierCoord(leader, _leader_f_score)) = frontier.pop() {
             if leader == to {
                 let mut nodes = vec![leader];
                 while let Some((_, Some(prev))) = history.get(nodes.last().unwrap()) {
@@ -178,20 +196,20 @@ impl Board {
                 return Some(Path::from_vec(nodes));
             }
 
-            frontier.remove(&leader);
-            let leader_dist = history.get(&leader).map(|hist| hist.0).unwrap_or(0);
-            let free_spaces = self.get_free_moves(leader, leader_dist).iter()
+            let leader_g_score = history.get(&leader).map(|hist| hist.0).unwrap_or(0);
+            let free_spaces = self.get_free_moves(leader, leader_g_score).iter()
                 .map(|dir| leader + (*dir).into())
                 .collect::<Vec<_>>();
 
             //todo: try JPS https://zerowidth.com/2013/a-visual-explanation-of-jump-point-search.html
             for free_space in free_spaces {
-                let dist = leader_dist + 1;
-                let hist = history.get(&free_space);
-                if hist.is_none() || dist < (*hist.unwrap()).0 {
+                let new_g_score = leader_g_score + 1;
+                let old_g_score = history.get(&free_space);
+                if old_g_score.is_none() || new_g_score < (*old_g_score.unwrap()).0 {
                     //todo: https://github.com/riscy/a_star_on_grids#avoid-recomputing-heuristics
-                    history.insert(free_space, (dist, Some(leader)));
-                    frontier.insert(free_space);
+                    history.insert(free_space, (new_g_score, Some(leader)));
+                    let new_f_score = new_g_score + (to - free_space).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT;
+                    frontier.push(FrontierCoord(free_space, new_f_score));
                 }
             }
         }
