@@ -2,5 +2,6 @@
 .idea
 **/*.rs.bk
 notes.md
+nohup.out
 perf.data
 perf.data.old
