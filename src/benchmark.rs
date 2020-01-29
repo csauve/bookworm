@@ -1,11 +1,11 @@
 use std::str;
 use std::time::{SystemTime};
+use log::*;
 use crate::game::path::Path;
 use crate::game::coord::Coord;
 use crate::game::offset::Offset;
 use crate::game::{turn::Turn, get_decision};
 use crate::api::{ApiDirection::*, ApiGameState};
-use log::*;
 
 macro_rules! timed {
     ($name:expr, $code:block) => ({
