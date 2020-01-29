@@ -19,6 +19,7 @@ Unit tests can be run with `cargo test`, though some strategy tests will fail cu
 
 #### Todos and improvement ideas:
 * Troubleshoot snake's tendency to die in head-on collisions
+* Tune heuristics to prevent snake from getting too big and trapping itself
 * Implement more unit tests for behaviour; fix the failing ones
 * Self-monitor performance and latency, dynamically tune lookahead depth to best utilize 500 ms allowance
 * Supposedly `if let Some(x) = vec.get(i)` is faster than `vec[i]`?
