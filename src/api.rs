@@ -65,43 +65,50 @@ pub struct ApiMove {
 
 impl ApiGameState {
     pub fn parse_basic(s: &str) -> ApiGameState {
-        let rows = s.lines().map(str::trim).filter(|l| l.starts_with('|')).collect::<Vec<_>>();
-        let height = rows.len();
+        let mut height = 0;
         let mut width = 0;
         let mut food = Vec::new();
         let mut snakes_coords: HashMap<String, Vec<ApiCoords>> = HashMap::new();
+        let mut snake_health: HashMap<String, u32> = HashMap::new();
         let mut you_coords = Vec::new();
 
-        for (y, row) in rows.iter().enumerate() {
-            let cols = row.trim_start_matches('|').split_terminator('|').collect::<Vec<_>>();
-            width = std::cmp::max(width, cols.len());
-            for (x, &col) in cols.iter().enumerate() {
-                let coord = ApiCoords {x: x as u32, y: y as u32};
-                match col.trim() {
-                    "" => {},
-                    "()" => {
-                        food.push(coord);
-                    },
-                    content => {
-                        if content.is_empty() {
-                            continue;
-                        }
-                        let snake_name: String = content.chars().take_while(|&c| c.is_alphabetic()).collect();
-                        let index: usize = content.chars().skip_while(|&c| c.is_alphabetic()).collect::<String>().parse().unwrap();
-                        if snake_name == "Y" {
-                            you_coords.resize(max(you_coords.len(), index + 1), coord);
-                            you_coords[index] = coord;
-                        } else if let Some(body) = snakes_coords.get_mut(&snake_name) {
-                            body.resize(max(body.len(), index + 1), coord);
-                            body[index] = coord;
-                        } else {
-                            let mut body = Vec::new();
-                            body.resize(max(body.len(), index + 1), coord);
-                            body[index] = coord;
-                            snakes_coords.insert(snake_name, body);
+        for row in s.lines().map(str::trim) {
+            if row.starts_with('|') {
+                let cols = row.trim_start_matches('|').split_terminator('|').collect::<Vec<_>>();
+                width = std::cmp::max(width, cols.len());
+                for (x, &col) in cols.iter().enumerate() {
+                    let coord = ApiCoords {x: x as u32, y: height as u32};
+                    match col.trim() {
+                        "" => {},
+                        "()" => {
+                            food.push(coord);
+                        },
+                        content => {
+                            if content.is_empty() {
+                                continue;
+                            }
+                            let snake_name: String = content.chars().take_while(|&c| c.is_alphabetic()).collect();
+                            let index: usize = content.chars().skip_while(|&c| c.is_alphabetic()).collect::<String>().parse().unwrap();
+                            if snake_name == "Y" {
+                                you_coords.resize(max(you_coords.len(), index + 1), coord);
+                                you_coords[index] = coord;
+                            } else if let Some(body) = snakes_coords.get_mut(&snake_name) {
+                                body.resize(max(body.len(), index + 1), coord);
+                                body[index] = coord;
+                            } else {
+                                let mut body = Vec::new();
+                                body.resize(max(body.len(), index + 1), coord);
+                                body[index] = coord;
+                                snakes_coords.insert(snake_name, body);
+                            }
                         }
                     }
                 }
+                height += 1;
+            } else if row.starts_with('+') {
+                let snake_name: String = row.chars().skip(1).take_while(|&c| c.is_alphabetic()).collect();
+                let health: u32 = row.chars().skip(1).skip_while(|&c| c.is_alphabetic()).collect::<String>().parse().unwrap();
+                snake_health.insert(snake_name, health);
             }
         }
 
@@ -115,7 +122,7 @@ impl ApiGameState {
                 snakes: snakes_coords.iter().map(|(name, body)| ApiSnake {
                     id: format!("id_{}", name),
                     name: name.clone(),
-                    health: 100,
+                    health: snake_health.get(name).copied().unwrap_or(100),
                     body: body.clone()
                 }).collect(),
             },

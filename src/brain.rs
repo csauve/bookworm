@@ -191,9 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_uncertain_future() {
-        //The A snake could easily trap us, so there should be some uncertainty in the score
-        //todo: check score range
+    fn test_almost_trapped() {
         assert_eq!(Up, decide!("
         |  |  |  |  |  |
         |  |A0|  |  |  |
@@ -207,7 +205,7 @@ mod tests {
     #[test]
     fn test_trap_enemy() {
         //we have the opportunity to trap the enemy snake and keep
-        assert_eq!(Left, decide!("
+        assert_ne!(Right, decide!("
         |  |  |  |  |  |
         |  |Y0|  |  |  |
         |  |Y1|  |  |  |
@@ -239,6 +237,52 @@ mod tests {
         |  |  |Y0|  |  |
         |  |  |Y1|  |  |
         |  |  |Y2|  |  |
+        "));
+    }
+
+    //turn 36: https://play.battlesnake.com/g/a70e0095-5534-421c-9c0d-b464466ac554/
+    #[test]
+    fn test_avoid_trap_opportunity() {
+        //if we go up, we will either die in head-to-head or give B the opportunity to trap us
+        assert_ne!(Up, decide!("
+        |  |  |  |  |  |()|A0|A1|A2|A3|  |
+        |B5|B4|B3|B2|Y1|Y0|  |  |  |  |  |
+        |B6|  |B0|B1|Y2|  |  |  |  |  |  |
+        |  |  |  |  |Y3|  |  |  |  |  |  |
+        |  |  |  |  |  |  |  |  |  |  |  |
+        |  |  |  |  |  |  |  |  |  |  |  |
+        |C2|C1|C0|  |  |  |  |  |  |  |  |
+        |C3|  |  |  |  |  |  |  |  |  |  |
+        |C4|  |  |  |  |  |  |  |  |  |  |
+        |C5|  |  |  |  |  |  |  |  |  |  |
+        |  |  |  |  |  |  |  |  |  |  |  |
+        +Y66
+        +A72
+        +B95
+        +C71
+        "));
+    }
+
+    //turn 20: https://play.battlesnake.com/g/f918c780-ef11-45ca-bd54-a2b9fb2dfc1e/
+    #[test]
+    fn test_avoid_head_to_head_death() {
+        assert_eq!(Up, decide!("
+        |  |  |  |  |  |  |  |  |  |  |  |
+        |  |()|  |  |  |  |  |  |  |  |  |
+        |C0|C1|C2|  |  |()|  |  |  |  |  |
+        |  |  |C3|C4|  |  |  |  |  |  |  |
+        |  |D3|D2|D1|  |Y3|Y2|Y1|Y0|  |  |
+        |  |  |  |D0|  |  |  |  |  |A0|  |
+        |  |  |  |  |  |  |B2|B1|  |A1|  |
+        |  |  |  |  |  |  |  |B0|  |A2|  |
+        |  |  |  |  |  |  |  |  |  |A3|  |
+        |  |  |  |  |  |  |  |  |  |A4|A5|
+        |  |  |  |  |  |  |  |  |  |  |  |
+        +Y84
+        +A95
+        +B80
+        +C93
+        +D98
         "));
     }
 }

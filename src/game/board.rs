@@ -14,8 +14,8 @@ use super::coord::{Coord, Unit, UnitAbs};
 use super::path::Path;
 use log::*;
 
-const SNAKE_MAX_HEALTH: Health = 100;
-const SNAKE_START_SIZE: UnitAbs = 3;
+pub const SNAKE_MAX_HEALTH: Health = 100;
+pub const SNAKE_START_SIZE: UnitAbs = 3;
 const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
@@ -35,9 +35,10 @@ pub struct Territory {
 }
 
 #[derive(Eq)]
-struct FrontierCoord(Coord, UnitAbs);
+struct FrontierCoord(Coord, UnitAbs); //coord with f_score
 
 impl Ord for FrontierCoord {
+    //note: g_score tiebreaking did not have a benefit: https://movingai.com/astar.html
     fn cmp(&self, other: &Self) -> Ordering {
         self.1.cmp(&other.1).reverse() //we want a min heap
     }
@@ -185,7 +186,6 @@ impl Board {
         frontier.push(FrontierCoord(from, (to - from).manhattan_dist() * PATHFINDING_HEURISTIC_WEIGHT));
         history.insert(from, (0, None));
 
-        //todo: g_score tiebreaking may improve perf https://movingai.com/astar.html
         while let Some(FrontierCoord(leader, _leader_f_score)) = frontier.pop() {
             if leader == to {
                 let mut nodes = vec![leader];

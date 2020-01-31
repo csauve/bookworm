@@ -8,8 +8,17 @@ use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
 use crate::game::{Coord, Board, Snake, UnitAbs};
 use crate::api::*;
+use ansi_term::{Colour, Style};
 
 const START_TIMEOUT_MS: u64 = 5000;
+const SNAKE_COLOURS: [Colour; 6] = [
+    Colour::Red,
+    Colour::Purple,
+    Colour::Blue,
+    Colour::Green,
+    Colour::Yellow,
+    Colour::Cyan,
+];
 
 #[derive(Clone)]
 struct LiveSnake {
@@ -151,22 +160,26 @@ fn draw_board(board: &Board, turn: u32) {
         grid[y as usize][x as usize] = String::from("*");
     }
 
-    for (i, snake) in board.snakes.iter().enumerate() {
-        for &Coord {x, y} in snake.body.nodes.iter() {
-            grid[y as usize][x as usize] = format!("{}", i);
+    for (snake_i, snake) in board.snakes.iter().enumerate() {
+        for (body_i, &Coord {x, y}) in snake.body.nodes.iter().enumerate() {
+            let mut style = Style::from(SNAKE_COLOURS[snake_i % SNAKE_COLOURS.len()]);
+            if body_i == 0 {
+                style = style.underline();
+            }
+            grid[y as usize][x as usize] = style.paint(snake_i.to_string()).to_string();
         }
     }
 
     let mut buf = format!("Turn {}: {} snakes\n", turn, board.snakes.len());
     buf.push_str(&(0..=(w * 4)).map(|i| {
         if i == 0 {
-            "┌"
+            Colour::Black.paint("╔").to_string()
         } else if i == w * 4 {
-            "┐\n"
+            Colour::Black.paint("╗\n").to_string()
         } else if i % 4 == 0 {
-            "┬"
+            Colour::Black.paint("╤").to_string()
         } else {
-            "─"
+            Colour::Black.paint("═").to_string()
         }
     }).collect::<String>());
 
@@ -174,30 +187,30 @@ fn draw_board(board: &Board, turn: u32) {
         if i != 0 {
             buf.push_str(&(0..=(w * 4)).map(|i| {
                 if i == 0 {
-                    "├"
+                    Colour::Black.paint("╟").to_string()
                 } else if i == w * 4 {
-                    "┤\n"
+                    Colour::Black.paint("╢\n").to_string()
                 } else if i % 4 == 0 {
-                    "┼"
+                    Colour::Black.paint("┼").to_string()
                 } else {
-                    "─"
+                    Colour::Black.paint("─").to_string()
                 }
             }).collect::<String>());
         }
-        buf.push_str("│ ");
-        buf.push_str(&row.join(" │ "));
-        buf.push_str(" │\n");
+        buf.push_str(&Colour::Black.paint("║ ").to_string());
+        buf.push_str(&row.join(&Colour::Black.paint(" │ ").to_string()));
+        buf.push_str(&Colour::Black.paint(" ║\n").to_string());
     }
 
     buf.push_str(&(0..=(w * 4)).map(|i| {
         if i == 0 {
-            "└"
+            Colour::Black.paint("╚").to_string()
         } else if i == w * 4 {
-            "┘"
+            Colour::Black.paint("╝").to_string()
         } else if i % 4 == 0 {
-            "┴"
+            Colour::Black.paint("╧").to_string()
         } else {
-            "─"
+            Colour::Black.paint("═").to_string()
         }
     }).collect::<String>());
 
