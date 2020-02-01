@@ -1,12 +1,10 @@
 use std::iter;
 use std::cmp::{Ord, Ordering, Eq, PartialEq, PartialOrd};
 use std::collections::{HashSet, HashMap, BinaryHeap};
-use std::sync::Mutex;
 use std::fmt;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use std::iter::FromIterator;
-use rayon::prelude::*;
 use crate::api::{ApiGameState, ApiDirection};
 use crate::util::cartesian_product;
 use super::snake::{Snake, Health};
@@ -29,9 +27,10 @@ pub struct Board {
     bound: Coord,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct Territory {
     pub area: UnitAbs,
-    pub food: Vec<Path>,
+    pub food: usize,
 }
 
 #[derive(Eq)]
@@ -154,7 +153,7 @@ impl Board {
     //gets the set of moves from this point which are not obstructed or out of bounds
     pub fn get_free_moves(&self, from: Coord, n_turns: usize) -> Vec<ApiDirection> {
         ALL_DIRS.iter().cloned().filter(|dir| {
-            let new_coord = from + (*dir).into();
+            let new_coord = from + *dir;
             new_coord.bounded_by(ORIGIN, self.bound) && self.snakes.iter().all(|snake| {
                 if (new_coord - snake.head()).manhattan_dist() > snake.size() {
                     //can save a little time ruling out snakes which are too far away
@@ -195,11 +194,11 @@ impl Board {
                 return Some(Path::from_vec(nodes));
             }
 
-            let leader_g_score = history.get(&leader).map(|hist| hist.0).unwrap_or(0);
+            let leader_g_score = history.get(&leader).map(|(g_score, ..)| *g_score).unwrap_or(0);
 
             //use g_score as number of turns in the future so we can shorten snake tails
             let free_spaces = self.get_free_moves(leader, leader_g_score).iter()
-                .map(|dir| leader + (*dir).into())
+                .map(|dir| leader + *dir)
                 .collect::<Vec<_>>();
 
             //todo: try JPS https://zerowidth.com/2013/a-visual-explanation-of-jump-point-search.html
@@ -218,63 +217,68 @@ impl Board {
         None
     }
 
-    //for each coord on the board, find out which snake is closest. in a tie, neither snake receives the coord
-    //todo: add a resolution parameter to do every n coords?
     pub fn get_territories(&self) -> Vec<Territory> {
-        let territories = Mutex::new(self.snakes.iter().map(|_| {
-            Territory {
-                area: 0,
-                food: Vec::new(),
-            }
-        }).collect::<Vec<_>>());
+        let mut ownerships = HashMap::<Coord, usize>::new();
+        let mut frontier = HashSet::<(Coord, usize)>::new();
+        for (i, snake) in self.snakes.iter().enumerate() {
+            let head = snake.head();
+            ownerships.insert(head, i);
+            frontier.insert((head, i));
+        }
 
-        let coords = cartesian_product(&[(0..self.bound.x).collect(), (0..self.bound.y).collect()]);
-
-        //large number of tasks with no need to synchronize; good spot to parallelize
-        coords.par_iter().for_each(|coord| {
-            let coord = Coord::new(coord[0], coord[1]);
-            let mut best_path: Option<Path> = None;
-            let mut best_snake: Option<usize> = None;
-
-            //sort snakes by their best case distances -- it's likely we can skip checking most of them
-            let mut sorted_snakes = self.snakes.iter()
-                .enumerate()
-                .map(|(i, snake)| (i, snake)) //make sure to include original index before sorting
-                .collect::<Vec<_>>();
-            sorted_snakes.sort_unstable_by_key(|(_, snake)| (coord - snake.head()).manhattan_dist());
-
-            for (i, snake) in sorted_snakes.iter() {
-                let snake_head = snake.head();
-
-                //because snakes are sorted by best case distance, can finish early if we can't do any better
-                if let Some(best) = best_path.as_ref() {
-                    if (coord - snake_head).manhattan_dist() > best.dist() {
-                        break;
-                    }
-                }
-
-                if let Some(path) = self.pathfind(snake_head, coord) {
-                    let path_dist = path.dist();
-                    if best_path.is_none() || path_dist < best_path.as_ref().unwrap().dist() {
-                        best_path = Some(path);
-                        best_snake = Some(*i);
-                    } else if path_dist == best_path.as_ref().unwrap().dist() {
-                        best_snake = None;
+        let mut turn: usize = 1;
+        while !frontier.is_empty() {
+            let mut next_frontier = HashSet::<(Coord, usize)>::new();
+            for (coord, owner) in frontier.iter() {
+                for dir in self.get_free_moves(*coord, turn).iter() {
+                    let neighbour = *coord + *dir;
+                    if !ownerships.contains_key(&neighbour) {
+                        ownerships.insert(neighbour, *owner);
+                        next_frontier.insert((neighbour, *owner));
                     }
                 }
             }
+            frontier = next_frontier;
+            turn += 1;
+        }
 
-            if let Some(i) = best_snake {
-                let mut territories = territories.lock().unwrap();
-                let territory = territories.get_mut(i).unwrap();
-                territory.area += 1;
-                if self.find_food(coord).is_some() {
-                    territory.food.push(best_path.unwrap());
+        let mut territories = vec![Territory {area: 0, food: 0}; self.snakes.len()];
+        for (_, owner) in ownerships.iter() {
+            territories.get_mut(*owner).unwrap().area += 1;
+        }
+        territories
+    }
+
+    //todo: baggage from old territory code... can this still be useful?
+    pub fn get_closest_snake(&self, coord: Coord) -> Option<(usize, UnitAbs)> {
+        let mut best_snake: Option<(usize, UnitAbs)> = None;
+
+        //sort snakes by their best case distances -- it's likely we can skip checking most of them
+        let mut sorted_snakes = self.snakes.iter()
+            .enumerate()
+            .map(|(i, snake)| (i, snake)) //make sure to include original index before sorting
+            .collect::<Vec<_>>();
+        sorted_snakes.sort_unstable_by_key(|(_, snake)| (coord - snake.head()).manhattan_dist());
+
+        for (i, snake) in sorted_snakes.iter() {
+            let snake_head = snake.head();
+
+            //because snakes are sorted by best case distance, can finish early if we can't do any better
+            if let Some((_, best_dist)) = best_snake.as_ref() {
+                if (coord - snake_head).manhattan_dist() > *best_dist {
+                    break;
                 }
             }
-        });
 
-        territories.into_inner().unwrap()
+            if let Some(path) = self.pathfind(snake_head, coord) {
+                let path_dist = path.dist();
+                if best_snake.is_none() || path_dist < best_snake.as_ref().unwrap().1 {
+                    best_snake = Some((*i, path_dist));
+                }
+            }
+        }
+
+        best_snake
     }
 
     //Applies known game rules to the board, returning indices of snakes that died

@@ -1,4 +1,4 @@
-use crate::api::ApiCoords;
+use crate::api::{ApiCoords, ApiDirection};
 use super::offset::Offset;
 use std::ops::{Add, Sub, AddAssign, SubAssign};
 use std::cmp::{max, min};
@@ -59,6 +59,15 @@ impl Coord {
         let y_min = min(a.y, b.y);
         self.x >= x_min && self.x <= x_max &&
             self.y >= y_min && self.y <= y_max
+    }
+}
+
+impl Add<ApiDirection> for Coord {
+    type Output = Coord;
+
+    #[inline]
+    fn add(self, rhs: ApiDirection) -> Coord {
+        self + Offset::from(rhs)
     }
 }
 

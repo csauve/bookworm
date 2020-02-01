@@ -3,16 +3,13 @@ use crate::api::{ApiGameState, ApiDirection};
 use crate::game::{Board, UnitAbs};
 use crate::util::cartesian_product;
 
-//these numbers are weak!!! time to optimize moar
-const MAX_LOOKAHEAD_DEPTH: u8 = 3;
-const PRIORITY_DIST: UnitAbs = 3;
-const MIN_PRIORITY_SNAKES: UnitAbs = 1;
+const HEURISTIC_BUDGET: usize = 1000;
 
 type Score = f32;
 
 pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
     let root_turn_board = Board::from_api(game_state);
-    let (score, path) = evaluate_board(&root_turn_board, MAX_LOOKAHEAD_DEPTH);
+    let (score, path) = evaluate_board(&root_turn_board, HEURISTIC_BUDGET);
     debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
     path.first().cloned().unwrap_or_else(|| root_turn_board.you().get_default_move())
 }
@@ -40,33 +37,20 @@ fn heuristic(board: &Board) -> Score {
     }
 }
 
-//todo: use a deadline instead of max_depth?
 //assumes the "you" index is 0 to avoid reshuffling complexity
-fn evaluate_board(board: &Board, max_depth: u8) -> (Score, Vec<ApiDirection>) {
-    if max_depth == 0 {
-        return (heuristic(board), Vec::new());
+fn evaluate_board(board: &Board, budget: usize) -> (Score, Vec<ApiDirection>) {
+    //nsure every snake makes at least their default move
+    let mut moves_to_explore = board.get_free_snake_moves();
+    for (i, moves) in moves_to_explore.iter_mut().enumerate() {
+        if moves.is_empty() {
+            moves.push(board.snakes.get(i).unwrap().get_default_move());
+        }
     }
 
-    //it's impractical to explore the entire turn tree, so filter moves out.
-    //also ensure every snake makes at least their default move
-    let moves_to_explore = board.get_free_snake_moves().iter().enumerate()
-        .map(|(i, moves)| {
-            let default_move = board.snakes[i].get_default_move();
-            let is_priority_snake = i < MIN_PRIORITY_SNAKES ||
-                (board.snakes[i].head() - board.you().head()).manhattan_dist() <= PRIORITY_DIST;
-            if moves.is_empty() {
-                vec![default_move]
-            } else if is_priority_snake {
-                moves.clone()
-            } else if moves.contains(&default_move) {
-                vec![default_move]
-            } else {
-                vec![moves[0]]
-            }
-        })
-        .collect::<Vec<_>>();
+    let move_space = cartesian_product(&moves_to_explore);
 
-    cartesian_product(&moves_to_explore).iter()
+    //todo: allocate budgets towards these turns
+    move_space.iter()
         .map(|moves| {
             let mut next_turn_board = board.clone();
             let you_move = moves[0];
@@ -74,7 +58,11 @@ fn evaluate_board(board: &Board, max_depth: u8) -> (Score, Vec<ApiDirection>) {
             if dead_snake_indices.iter().any(|(d, _)| *d == 0) {
                 (0.0, vec![you_move])
             } else {
-                let (score, mut path) = evaluate_board(&next_turn_board, max_depth - 1);
+                let (score, mut path) = if something {
+                    (heuristic(board), Vec::new())
+                } else {
+                    evaluate_board(&next_turn_board, something_else);
+                }
                 path.insert(0, you_move);
                 (score, path)
             }

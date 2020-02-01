@@ -69,7 +69,7 @@ fn board() {
         let _path = board.pathfind(board.you().head(), Coord::new(11, 11));
     });
 
-    timed!("territories", 1_000, |_| {
+    timed!("territories", 10_000, |_| {
         let _territories = board.get_territories();
     });
 }
@@ -109,6 +109,25 @@ fn decision() {
     ");
 
     timed!("get_decision_late_game", 100, |_| {
+        get_decision(&game_state);
+    });
+
+    //this is a particularly bad case for choosing priority snakes
+    let game_state = ApiGameState::parse_basic("
+    |  |  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |D0|D1|D2|  |  |
+    |  |  |  |B1|B0|  |  |  |  |  |  |
+    |  |  |  |C1|C0|Y0|  |  |  |  |  |
+    |  |  |  |  |  |Y1|A0|A1|A2|  |  |
+    |  |  |  |  |  |Y2|  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |  |  |  |
+    |  |  |  |  |  |  |  |  |  |  |  |
+    ");
+
+    timed!("get_decision_tricky", {
         get_decision(&game_state);
     });
 }
