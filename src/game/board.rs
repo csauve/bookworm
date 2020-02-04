@@ -169,12 +169,17 @@ impl Board {
         }).collect()
     }
 
-    //find out where each snake can move to next
-    pub fn get_free_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
-        self.snakes.iter().map(|snake| self.get_free_moves(snake.head(), 1)).collect()
+    //find out where each snake can move to next. if a snake is trapped, assume Up
+    pub fn enumerate_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
+        self.snakes.iter().map(|snake| {
+            let moves = self.get_free_moves(snake.head(), 1);
+            if moves.is_empty() {
+                moves.push(ApiDirection::Up);
+            }
+            moves
+        }).collect()
     }
 
-    //todo: try returning distance only
     //A* pathfinding
     pub fn pathfind(&self, from: Coord, to: Coord) -> Option<Path> {
         //heap keeps open set sorted by best f_score
@@ -282,7 +287,7 @@ impl Board {
     }
 
     //Applies known game rules to the board, returning indices of snakes that died
-    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashSet<(usize, &'static str)> {
+    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashMap<usize, &'static str> {
         let mut eaten_food: HashSet<usize> = HashSet::new();
 
         //move snakes and find eaten food
@@ -318,7 +323,7 @@ impl Board {
                 }
             }
             None
-        }).collect::<HashSet<(usize, &'static str)>>();
+        }).collect::<HashMap<usize, &'static str>>();
 
         //clean up
         if !eaten_food.is_empty() {
@@ -329,7 +334,7 @@ impl Board {
         if !dead_snakes.is_empty() {
             self.snakes = self.snakes.iter().enumerate()
                 .filter_map(|(i, s)| {
-                    if dead_snakes.iter().any(|(d, _)| *d == i) {
+                    if dead_snakes.contains_key(&i) {
                         None
                     } else {
                         Some(s.clone())

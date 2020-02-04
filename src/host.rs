@@ -100,7 +100,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
         error!("Some snake(s) failed to respond to the start call: {}", &e);
         return;
     }
-    let mut live_snakes = live_snakes.unwrap();
+    let mut live_snakes: Vec<LiveSnake> = live_snakes.unwrap();
 
     while board.snakes.len() > 1 {
         draw_board(&board, turn);
@@ -130,7 +130,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
             info!("Snakes died: {:?}", &dead_snake_indices);
             live_snakes = live_snakes.iter().enumerate()
                 .filter_map(|(i, ls)| {
-                    if dead_snake_indices.iter().any(|(d, _)| *d == i) {
+                    if dead_snake_indices.contains_key(&i) {
                         None
                     } else {
                         Some(ls.clone())

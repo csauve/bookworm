@@ -1,22 +1,44 @@
+use std::cmp::{Eq, PartialEq, Ord, Ordering, PartialOrd};
+use std::collections::{BinaryHeap};
 use log::*;
 use crate::api::{ApiGameState, ApiDirection};
 use crate::game::{Board, UnitAbs};
 use crate::util::cartesian_product;
 
-const HEURISTIC_BUDGET: usize = 1000;
+const LOOKAHEAD_BUDGET: usize = 1000;
 
 type Score = f32;
 
-pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
-    let root_turn_board = Board::from_api(game_state);
-    let (score, path) = evaluate_board(&root_turn_board, HEURISTIC_BUDGET);
-    debug!("Turn {} score {}: {:?}", game_state.turn, score, path);
-    path.first().cloned().unwrap_or_else(|| root_turn_board.you().get_default_move())
+struct FrontierBoard {
+    board: Board,
+    root_dir: Option<ApiDirection>,
+    f_score: Score,
+    g_score: Score,
 }
 
-fn heuristic(board: &Board) -> Score {
+impl Ord for FrontierBoard {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.partial_cmp(other).unwrap() //assume no NaN scores
+    }
+}
+
+impl PartialOrd for FrontierBoard {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.f_score.partial_cmp(&other.f_score)
+    }
+}
+
+impl Eq for FrontierBoard {}
+
+impl PartialEq for FrontierBoard {
+    fn eq(&self, other: &Self) -> bool {
+        self.f_score == other.f_score
+    }
+}
+
+fn heuristic(board: &Board) -> Vec<Score> {
     let territories = board.get_territories();
-    let indiv_scores = board.snakes.iter().enumerate().map(|(snake_index, snake)| {
+    board.snakes.iter().enumerate().map(|(snake_index, snake)| {
         let territory = territories.get(snake_index).unwrap();
         //todo: tune heuristics (e.g. prevent from being too big)
         let h_control = territory.area as Score / board.area() as Score;
@@ -26,49 +48,57 @@ fn heuristic(board: &Board) -> Score {
             .count() as Score /
             board.snakes.len() as Score;
         h_food * h_head_to_head * h_control
-    }).collect::<Vec<_>>();
-
-    let you_score = indiv_scores[0];
-    let enemy_score_sum = indiv_scores.iter().skip(1).fold(0.0, |sum, s| sum + s);
-    if indiv_scores.len() <= 2 {
-        (you_score - enemy_score_sum) + 0.1
-    } else {
-        (you_score - enemy_score_sum / (indiv_scores.len() as Score - 1.0)) + 0.1
-    }
+    }).collect::<Vec<_>>()
 }
 
-//assumes the "you" index is 0 to avoid reshuffling complexity
-fn evaluate_board(board: &Board, budget: usize) -> (Score, Vec<ApiDirection>) {
-    //nsure every snake makes at least their default move
-    let mut moves_to_explore = board.get_free_snake_moves();
-    for (i, moves) in moves_to_explore.iter_mut().enumerate() {
-        if moves.is_empty() {
-            moves.push(board.snakes.get(i).unwrap().get_default_move());
+//search the turn tree for a good and likely result, returning the first move to get there
+pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
+    let root_turn_board = Board::from_api(game_state);
+    let default_move = root_turn_board.you().get_default_move();
+
+    let mut budget = LOOKAHEAD_BUDGET;
+    let mut frontier: BinaryHeap<FrontierBoard> = BinaryHeap::new();
+    frontier.push(FrontierBoard {
+        board: root_turn_board,
+        root_dir: None,
+        f_score: 1.0, //dont bother with heuristic; we're gonna pop it first anyway
+        g_score: 1.0,
+    });
+
+    //live ur best life
+    while let Some(leader) = frontier.pop() {
+        if budget == 0 || leader.board.snakes.len() == 1 {
+            return leader.root_dir.unwrap_or(default_move);
         }
+
+        let leader_h_scores = heuristic(&leader.board);
+
+        //todo: optimize this... parallelize? skip vec?
+        for moves in cartesian_product(&leader.board.enumerate_snake_moves()).iter() {
+            let mut next_turn_board = leader.board.clone();
+            let dead_snake_indices = next_turn_board.advance(false, moves);
+            //we are maintaining index 0 as "you". if we die it's not worth exploring further
+            if !dead_snake_indices.contains_key(&0) {
+                let next_h_scores = heuristic(&next_turn_board);
+                //weigh the h_score so we don't just choose the lucky happy path.
+                let next_turn_g_score = 0.5;
+                let g_score = leader.g_score * next_turn_g_score; //todo: this will compound and cause shallow serching
+                let f_score = h_score * g_score;
+
+                frontier.push(FrontierBoard {
+                    board: next_turn_board,
+                    root_dir: Some(leader.root_dir.unwrap_or_else(|| *moves.get(0).unwrap())),
+                    f_score,
+                    g_score,
+                });
+            }
+        }
+
+        budget -= 1;
     }
 
-    let move_space = cartesian_product(&moves_to_explore);
-
-    //todo: allocate budgets towards these turns
-    move_space.iter()
-        .map(|moves| {
-            let mut next_turn_board = board.clone();
-            let you_move = moves[0];
-            let dead_snake_indices = next_turn_board.advance(false, moves);
-            if dead_snake_indices.iter().any(|(d, _)| *d == 0) {
-                (0.0, vec![you_move])
-            } else {
-                let (score, mut path) = if something {
-                    (heuristic(board), Vec::new())
-                } else {
-                    evaluate_board(&next_turn_board, something_else);
-                }
-                path.insert(0, you_move);
-                (score, path)
-            }
-        })
-        .max_by(|(score_a, _), (score_b, _)| score_a.partial_cmp(score_b).unwrap())
-        .unwrap_or_else(|| (0.0, vec![]))
+    //game over, man
+    default_move
 }
 
 #[cfg(test)]

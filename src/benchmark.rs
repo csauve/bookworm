@@ -62,7 +62,7 @@ fn board() {
     let board = Board::from_api(&game_state);
 
     timed!("get_free_moves", 1_000, |_| {
-        board.get_free_snake_moves()
+        board.enumerate_snake_moves()
     });
 
     timed!("pathfind", 1_000, |_| {
