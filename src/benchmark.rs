@@ -90,7 +90,7 @@ fn decision() {
     |  |  |  |()|  |  |  |  |  |  |  |  |
     ");
 
-    timed!("get_decision_early_game", 100, |_| {
+    timed!("get_decision_early_game", 3, |_| {
         get_decision(&game_state);
     });
 
@@ -108,7 +108,7 @@ fn decision() {
     |   |() |   |   |   |   |   |   |   |   |() |
     ");
 
-    timed!("get_decision_late_game", 100, |_| {
+    timed!("get_decision_late_game", 3, |_| {
         get_decision(&game_state);
     });
 

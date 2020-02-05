@@ -5,7 +5,7 @@ use std::fmt;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use std::iter::FromIterator;
-use crate::api::{ApiGameState, ApiDirection};
+use crate::api::{ApiGameState, ApiDirection, ALL_DIRS};
 use crate::util::cartesian_product;
 use super::snake::{Snake, Health};
 use super::coord::{Coord, Unit, UnitAbs};
@@ -16,7 +16,6 @@ pub const SNAKE_MAX_HEALTH: Health = 100;
 pub const SNAKE_START_SIZE: UnitAbs = 3;
 const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
 const ORIGIN: Coord = Coord {x: 0, y: 0};
-const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -172,7 +171,7 @@ impl Board {
     //find out where each snake can move to next. if a snake is trapped, assume Up
     pub fn enumerate_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
         self.snakes.iter().map(|snake| {
-            let moves = self.get_free_moves(snake.head(), 1);
+            let mut moves = self.get_free_moves(snake.head(), 1);
             if moves.is_empty() {
                 moves.push(ApiDirection::Up);
             }

@@ -57,6 +57,20 @@ pub enum ApiDirection {
     Right,
 }
 
+impl ApiDirection {
+    #[inline]
+    pub fn as_index(self) -> usize {
+        match self {
+            Self::Down => 0,
+            Self::Left => 1,
+            Self::Up => 2,
+            Self::Right => 3,
+        }
+    }
+}
+
+pub const ALL_DIRS: [ApiDirection; 4] = [ApiDirection::Down, ApiDirection::Left, ApiDirection::Up, ApiDirection::Right];
+
 #[derive(Deserialize, Serialize)]
 pub struct ApiMove {
     #[serde(rename = "move")]
