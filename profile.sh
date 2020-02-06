@@ -1,4 +1,4 @@
 #!/bin/sh
-RUSTFLAGS="--emit=asm" cargo build --release
+./build.sh
 perf record --call-graph dwarf -- ./target/release/bookworm benchmark
 perf report
