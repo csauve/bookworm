@@ -1,6 +1,6 @@
 # BookWorm 🐛
 
-BookWorm is a [BattleSnake][1] bot written in [Rust][2] for the March 2020 tournament. It aims to combine pruned turn tree exploration with heuristic scoring. It's still a WIP, so will do some dumb things!
+BookWorm is a [BattleSnake][1] bot written in [Rust][2] for the March 2020 tournament. Combines the strategies of pruned turn tree exploration, minimax, and heuristic scoring. The snake is given a time budget to explore the turn tree; the fewer the snakes, the deeper the exploration.
 
 ![](screenshot.png)
 _A server instance playing against itself using the built-in host mode. See `play-self.sh` as an example._
@@ -15,16 +15,12 @@ Just run `cargo build --release` to produce a self-contained binary at `target/r
 
 ## Development
 
-Unit tests can be run with `cargo test`, though some strategy tests will fail currently. To quickly build and run the bot, use `cargo run <mode>`. Note that the development build is significantly slower at runtime than the release build, so you may need to increase the `--timeout` for host mode.
+Unit tests can be run with `cargo test`, though some strategy tests will fail currently. To quickly build and run the bot, use `cargo run <mode>`. Note that the development build is significantly slower at runtime than the release build, so you may need to increase the `--timeout` for host mode and give the server more time budget with `--budget` to achieve similar lookahead depths.
 
 #### Todos and improvement ideas:
-* Troubleshoot snake's tendency to die in head-on collisions
-* Tune heuristics to prevent snake from getting too big and trapping itself
 * Implement more unit tests for behaviour; fix the failing ones
-* Self-monitor performance and latency, dynamically tune lookahead depth to best utilize 500 ms allowance
-* Supposedly `if let Some(x) = vec.get(i)` is faster than `vec[i]`?
 * Look for opportunities to use [infallible DS][3] to avoid empty checks
-* Use Jump Point Search to improve performance of pathfinding
+* Use Jump Point Search to improve performance of pathfinding, assuming pathfinding code still needed
 
 ## Resources
 
