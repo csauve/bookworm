@@ -1,4 +1,3 @@
-use std::iter;
 use std::time::Duration;
 use std::io;
 use futures::{future, FutureExt};
@@ -6,19 +5,11 @@ use log::*;
 use tokio::time::timeout;
 use uuid::Uuid;
 use hyper::{Client, Request, Body, body, client::connect::HttpConnector};
-use crate::game::{Coord, Board, Snake, UnitAbs};
+use crate::game::{Board, Snake, UnitAbs};
 use crate::api::*;
-use ansi_term::{Colour, Style};
+use crate::util::draw_board;
 
 const START_TIMEOUT_MS: u64 = 5000;
-const SNAKE_COLOURS: [Colour; 6] = [
-    Colour::Red,
-    Colour::Purple,
-    Colour::Blue,
-    Colour::Green,
-    Colour::Yellow,
-    Colour::Cyan,
-];
 
 #[derive(Clone)]
 struct LiveSnake {
@@ -103,7 +94,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
     let mut live_snakes: Vec<LiveSnake> = live_snakes.unwrap();
 
     while board.snakes.len() > 1 {
-        draw_board(&board, turn);
+        info!("Turn {}: {} snakes\n{}", turn, board.snakes.len(), draw_board(&board));
         if prompt {
             wait_for_prompt();
         }
@@ -146,76 +137,7 @@ pub async fn run_game(timeout_ms: u64, snakes_addrs: &[String], width: UnitAbs, 
     //notify winner (may be none if both died in final turn)
 }
 
-fn draw_board(board: &Board, turn: u32) {
-    let w = board.width();
-    let h = board.height();
 
-    let mut grid = iter::repeat_with(|| {
-        iter::repeat_with(|| {
-            String::from(" ")
-        }).take(w).collect::<Vec<_>>()
-    }).take(h).collect::<Vec<_>>();
-
-    for &Coord {x, y} in board.food.iter() {
-        grid[y as usize][x as usize] = String::from("*");
-    }
-
-    for (snake_i, snake) in board.snakes.iter().enumerate() {
-        for (body_i, &Coord {x, y}) in snake.body.nodes.iter().enumerate() {
-            let mut style = Style::from(SNAKE_COLOURS[snake_i % SNAKE_COLOURS.len()]);
-            if body_i == 0 {
-                style = style.underline();
-            }
-            grid[y as usize][x as usize] = style.paint(snake_i.to_string()).to_string();
-        }
-    }
-
-    let mut buf = format!("Turn {}: {} snakes\n", turn, board.snakes.len());
-    buf.push_str(&(0..=(w * 4)).map(|i| {
-        if i == 0 {
-            Colour::Black.paint("╔").to_string()
-        } else if i == w * 4 {
-            Colour::Black.paint("╗\n").to_string()
-        } else if i % 4 == 0 {
-            Colour::Black.paint("╤").to_string()
-        } else {
-            Colour::Black.paint("═").to_string()
-        }
-    }).collect::<String>());
-
-    for (i, row) in grid.iter().enumerate() {
-        if i != 0 {
-            buf.push_str(&(0..=(w * 4)).map(|i| {
-                if i == 0 {
-                    Colour::Black.paint("╟").to_string()
-                } else if i == w * 4 {
-                    Colour::Black.paint("╢\n").to_string()
-                } else if i % 4 == 0 {
-                    Colour::Black.paint("┼").to_string()
-                } else {
-                    Colour::Black.paint("─").to_string()
-                }
-            }).collect::<String>());
-        }
-        buf.push_str(&Colour::Black.paint("║ ").to_string());
-        buf.push_str(&row.join(&Colour::Black.paint(" │ ").to_string()));
-        buf.push_str(&Colour::Black.paint(" ║\n").to_string());
-    }
-
-    buf.push_str(&(0..=(w * 4)).map(|i| {
-        if i == 0 {
-            Colour::Black.paint("╚").to_string()
-        } else if i == w * 4 {
-            Colour::Black.paint("╝").to_string()
-        } else if i % 4 == 0 {
-            Colour::Black.paint("╧").to_string()
-        } else {
-            Colour::Black.paint("═").to_string()
-        }
-    }).collect::<String>());
-
-    info!("{}", &buf);
-}
 
 fn wait_for_prompt() {
     info!("Press [ENTER] to continue");

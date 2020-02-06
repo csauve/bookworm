@@ -6,7 +6,7 @@ use log::*;
 use rayon::prelude::*;
 use crate::api::{ApiDirection, ApiGameState, ALL_DIRS};
 use crate::game::{Board, UnitAbs};
-use crate::util::cartesian_product;
+use crate::util::{cartesian_product, draw_board};
 
 const IGNORE_MOVES_DIST: UnitAbs = 5;
 
@@ -80,7 +80,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
 
     let mut frontier: BinaryHeap<FrontierBoard> = BinaryHeap::new();
     frontier.push(FrontierBoard {
-        board: root_turn_board,
+        board: root_turn_board.clone(),
         root_dir: None,
         h_score: 1.0, //dont bother with heuristic; we're gonna pop it first anyway
     });
@@ -88,6 +88,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
     //live ur best life
     while let Some(leader) = frontier.pop() {
         if SystemTime::now().duration_since(start).unwrap() >= budget {
+            debug!("Decision: dir={:?}, score={}\nRoot:\n{}\nLeader:\n{}", leader.root_dir, leader.h_score, draw_board(&root_turn_board), draw_board(&leader.board));
             return leader.root_dir.unwrap_or(default_move);
         }
 
@@ -117,6 +118,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             //we are maintaining index 0 as "you"
             let dir_index = moves.get(0).unwrap().as_index();
             let next_h_score = if dead_snake_indices.contains_key(&0) {
+                debug!("Discovered own death");
                 std::f32::MIN
             } else {
                 heuristic(&next_board, 0)
@@ -146,7 +148,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
         }
     }
 
-    //game over, man
+    debug!("game over, man!");
     default_move
 }
 
