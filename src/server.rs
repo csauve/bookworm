@@ -1,13 +1,14 @@
 use std::convert::Infallible;
 use std::net::{SocketAddr, IpAddr};
-use std::time::{SystemTime};
+use std::time::{SystemTime, Duration};
 use log::*;
 use hyper::{Body, Request, Response, Server, Method, StatusCode, body, service::{make_service_fn, service_fn}};
 use crate::api::{ApiSnakeConfig, ApiMove};
 use crate::brain::get_decision;
 
-pub async fn start_server(ip: IpAddr, port: u16) {
+pub async fn start_server(ip: IpAddr, port: u16, budget: u64) {
     let addr = SocketAddr::new(ip, port);
+    let budget = Duration::from_millis(budget);
     println!("
     ┌────────────────────────────────┐
     │ ╖                              │
@@ -20,9 +21,9 @@ pub async fn start_server(ip: IpAddr, port: u16) {
     );
 
     let server = Server::bind(&addr).serve(make_service_fn(|_socket|
-        async {
+        async move {
             Ok::<_, Infallible>(service_fn(move |req: Request<Body>|
-                async {
+                async move {
                     Ok::<_, Infallible>(match (req.method(), req.uri().path()) {
                         (&Method::GET, "/") => {
                             Response::new(Body::from("What'sssss up?"))
@@ -48,7 +49,7 @@ pub async fn start_server(ip: IpAddr, port: u16) {
                             match serde_json::from_slice(&bytes) {
                                 Ok(game_state) => {
                                     let start = SystemTime::now();
-                                    let decision = get_decision(&game_state);
+                                    let decision = get_decision(&game_state, budget);
                                     let json = serde_json::to_string(&ApiMove {decision}).unwrap();
                                     let duration = SystemTime::now().duration_since(start).unwrap().as_millis();
                                     info!(

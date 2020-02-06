@@ -47,6 +47,12 @@ async fn main() {
                 .takes_value(true)
                 .default_value("127.0.0.1")
             )
+            .arg(Arg::with_name("budget")
+                .short("b")
+                .help("Time budget for responding to /move requests, in milliseconds")
+                .takes_value(true)
+                .default_value("250")
+            )
         )
         .subcommand(SubCommand::with_name("host")
             .about("Host a match between snakes.")
@@ -91,7 +97,8 @@ async fn main() {
         ("server", Some(args)) => {
             server::start_server(
                 args.value_of("ip").unwrap().parse().expect("IP must be an IPV6 or IPV4 format"),
-                args.value_of("port").unwrap().parse().expect("Port must be numeric")
+                args.value_of("port").unwrap().parse().expect("Port must be numeric"),
+                args.value_of("budget").unwrap().parse().expect("Time budget must be numeric")
             ).await;
         }
         ("host", Some(args)) => {

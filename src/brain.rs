@@ -8,7 +8,7 @@ use crate::api::{ApiDirection, ApiGameState, ALL_DIRS};
 use crate::game::{Board, UnitAbs};
 use crate::util::cartesian_product;
 
-const LOOKAHEAD_BUDGET: Duration = Duration::from_millis(250);
+const IGNORE_MOVES_DIST: UnitAbs = 5;
 
 type Score = f32;
 
@@ -43,21 +43,36 @@ fn heuristic(board: &Board, snake_index: usize) -> Score {
     let territories = board.get_territories();
     let snake = board.snakes.get(snake_index).unwrap();
     let territory = territories.get(snake_index).unwrap();
-    //todo: tune heuristics
     let h_control = territory.area as Score / board.area() as Score;
-    let h_food = snake.health as Score / 100.0;
-    let h_head_to_head = board
-        .snakes
-        .iter()
-        .enumerate()
-        .filter(|(other_index, other)| *other_index == snake_index || snake.size() > other.size())
-        .count() as Score
-        / board.snakes.len() as Score;
+    let h_food = {
+        let food_density = if territory.area == 0 {
+            0.0
+        } else {
+            territory.num_food as Score / territory.area as Score
+        };
+        let turns_until_starve = snake.health;
+        if territory.nearest_food.map(|nearest| nearest <= turns_until_starve as usize).unwrap_or(false) {
+            1.0
+        } else {
+            let expected_food = turns_until_starve as Score * food_density;
+            match expected_food.partial_cmp(&1.0).unwrap() {
+                Ordering::Less => expected_food,
+                _ => 1.0,
+            }
+        }
+    };
+    let h_head_to_head = board.snakes.iter().enumerate()
+        .filter(|(other_index, other)| {
+            *other_index == snake_index || //dont need to worry about self
+            snake.size() > other.size() || //dont need to worry about small snakes
+            (snake.head() - other.head()).manhattan_dist() > 2 //dont need to worry about distant snakes
+        })
+        .count() as Score / board.snakes.len() as Score;
     h_food * h_head_to_head * h_control
 }
 
 //search the turn tree for a good and likely result, returning the first move to get there
-pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
+pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection {
     let start = SystemTime::now();
 
     let root_turn_board = Board::from_api(game_state);
@@ -72,7 +87,7 @@ pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
 
     //live ur best life
     while let Some(leader) = frontier.pop() {
-        if SystemTime::now().duration_since(start).unwrap() >= LOOKAHEAD_BUDGET {
+        if SystemTime::now().duration_since(start).unwrap() >= budget {
             return leader.root_dir.unwrap_or(default_move);
         }
 
@@ -80,31 +95,46 @@ pub fn get_decision(game_state: &ApiGameState) -> ApiDirection {
         let worst_outcomes: Mutex<[Option<FrontierBoard>; ALL_DIRS.len()]> = Mutex::new([None, None, None, None]);
 
         //todo: this can get pretty extreme for an 8 player game -- prune some moves which don't matter much?
-        let snake_moves = leader.board.enumerate_snake_moves();
+        let mut snake_moves = leader.board.enumerate_snake_moves();
+        let you_head = leader.board.you().head();
+        for (other_index, dirs) in snake_moves.iter_mut().enumerate().skip(1) {
+            let other = leader.board.snakes.get(other_index).unwrap();
+            if (other.head() - you_head).manhattan_dist() > IGNORE_MOVES_DIST {
+                let default_move = other.get_default_move();
+                if dirs.contains(&default_move) {
+                    dirs.resize(1, default_move);
+                } else {
+                    dirs.truncate(1);
+                }
+            }
+        }
 
         //YOU GET A CORE, YOU GET A CORE, YOU GET A CORE! EVERYBODY GETS A CORE!
         cartesian_product(&snake_moves).par_iter().for_each(|moves| {
             let mut next_board = leader.board.clone();
             let dead_snake_indices = next_board.advance(false, moves);
-            //we are maintaining index 0 as "you". if we die it's not worth exploring further
-            if !dead_snake_indices.contains_key(&0) {
-                let dir_index = moves.get(0).unwrap().as_index();
-                let next_h_score = heuristic(&next_board, 0);
 
-                let is_new_worst = worst_outcomes.lock().unwrap()
-                    .get(dir_index)
-                    .unwrap()
-                    .as_ref()
-                    .map(|worst_outcome| next_h_score < worst_outcome.h_score)
-                    .unwrap_or(true);
+            //we are maintaining index 0 as "you"
+            let dir_index = moves.get(0).unwrap().as_index();
+            let next_h_score = if dead_snake_indices.contains_key(&0) {
+                std::f32::MIN
+            } else {
+                heuristic(&next_board, 0)
+            };
 
-                if is_new_worst {
-                    worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
-                        board: next_board,
-                        root_dir: Some(leader.root_dir.unwrap_or_else(|| *moves.get(0).unwrap())),
-                        h_score: next_h_score,
-                    });
-                }
+            let is_new_worst = worst_outcomes.lock().unwrap()
+                .get(dir_index)
+                .unwrap()
+                .as_ref()
+                .map(|worst_outcome| next_h_score < worst_outcome.h_score)
+                .unwrap_or(true);
+
+            if is_new_worst {
+                worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
+                    board: next_board,
+                    root_dir: Some(leader.root_dir.unwrap_or_else(|| *moves.get(0).unwrap())),
+                    h_score: next_h_score * 0.25 + leader.h_score * 0.75,
+                });
             }
         });
 
@@ -128,7 +158,7 @@ mod tests {
 
     macro_rules! decide {
         ($s:expr) => {
-            get_decision(&ApiGameState::parse_basic($s))
+            get_decision(&ApiGameState::parse_basic($s), Duration::from_millis(250))
         };
     }
 

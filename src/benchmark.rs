@@ -1,5 +1,5 @@
 use std::str;
-use std::time::{SystemTime};
+use std::time::{SystemTime, Duration};
 use log::*;
 use crate::game::{Path, Coord, Offset, Board};
 use crate::brain::get_decision;
@@ -91,7 +91,7 @@ fn decision() {
     ");
 
     timed!("get_decision_early_game", 3, |_| {
-        get_decision(&game_state);
+        get_decision(&game_state, Duration::from_millis(250));
     });
 
     let game_state = ApiGameState::parse_basic("
@@ -109,7 +109,7 @@ fn decision() {
     ");
 
     timed!("get_decision_late_game", 3, |_| {
-        get_decision(&game_state);
+        get_decision(&game_state, Duration::from_millis(250));
     });
 
     //this is a particularly bad case for choosing priority snakes
@@ -128,7 +128,7 @@ fn decision() {
     ");
 
     timed!("get_decision_tricky", {
-        get_decision(&game_state);
+        get_decision(&game_state, Duration::from_millis(250));
     });
 }
 

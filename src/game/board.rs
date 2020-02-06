@@ -29,7 +29,8 @@ pub struct Board {
 #[derive(Copy, Clone, Debug)]
 pub struct Territory {
     pub area: UnitAbs,
-    pub food: usize,
+    pub num_food: usize,
+    pub nearest_food: Option<UnitAbs>,
 }
 
 #[derive(Eq)]
@@ -136,19 +137,6 @@ impl Board {
         }
     }
 
-    //note -- hash key elements must are ordered such that key.0 < key.1
-    //todo: this actually slowed down evaluate_board when used for pruning... can it be useful elsewhere?
-    pub fn get_snake_dist_matrix(&self) -> HashMap<(usize, usize), UnitAbs> {
-        let mut results = HashMap::new();
-        for (a, snake_a) in self.snakes.iter().enumerate() {
-            for (b, snake_b) in self.snakes.iter().enumerate().skip(a + 1) {
-                let dist = (snake_a.head() - snake_b.head()).manhattan_dist();
-                results.insert((a, b), dist);
-            }
-        }
-        results
-    }
-
     //gets the set of moves from this point which are not obstructed or out of bounds
     pub fn get_free_moves(&self, from: Coord, n_turns: usize) -> Vec<ApiDirection> {
         ALL_DIRS.iter().cloned().filter(|dir| {
@@ -168,7 +156,7 @@ impl Board {
         }).collect()
     }
 
-    //find out where each snake can move to next. if a snake is trapped, assume Up
+    //find out where each snake can move to next. since snakes MUST move, if a snake is trapped, assume Up
     pub fn enumerate_snake_moves(&self) -> Vec<Vec<ApiDirection>> {
         self.snakes.iter().map(|snake| {
             let mut moves = self.get_free_moves(snake.head(), 1);
@@ -246,9 +234,16 @@ impl Board {
             turn += 1;
         }
 
-        let mut territories = vec![Territory {area: 0, food: 0}; self.snakes.len()];
-        for (_, owner) in ownerships.iter() {
-            territories.get_mut(*owner).unwrap().area += 1;
+        let mut territories = vec![Territory {area: 0, nearest_food: None, num_food: 0}; self.snakes.len()];
+        for (&coord, &owner) in ownerships.iter() {
+            if self.find_food(coord).is_some() {
+                let food_dist = (self.snakes.get(owner).unwrap().head() - coord).manhattan_dist();
+                if territories.get(owner).unwrap().nearest_food.map(|f| f < food_dist).unwrap_or(true) {
+                    territories.get_mut(owner).unwrap().nearest_food = Some(food_dist);
+                }
+                territories.get_mut(owner).unwrap().num_food += 1;
+            }
+            territories.get_mut(owner).unwrap().area += 1;
         }
         territories
     }
