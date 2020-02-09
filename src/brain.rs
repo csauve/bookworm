@@ -49,6 +49,7 @@ fn heuristic(board: &Board, snake_index: usize) -> Score {
         let total_areas: UnitAbs = territories.iter().map(|terr| terr.area).sum();
         territory.area as Score / total_areas as Score
     };
+    //todo: consider feeding as way to increase control and prevent head_to_head
     let h_food = {
         let food_density = if territory.area == 0 {
             0.0
@@ -152,7 +153,8 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             }
         });
 
-        //move the worst outcomes into the frontier
+        //move the worst outcomes into the frontier so we can choose the best move, unless death is the worst case
+        //todo: how can we avoid choosing turns which result in likely death 2 turns from now?
         for worst_outcome in worst_outcomes.lock().unwrap().iter_mut() {
             if let Some(frontier_board) = worst_outcome.take() {
                 if frontier_board.h_score != std::f32::MIN {
