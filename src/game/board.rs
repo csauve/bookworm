@@ -248,8 +248,21 @@ impl Board {
         territories
     }
 
+    //returns a list of snake indices sorted by increasing distance from the given point
+    pub fn get_closest_snakes_by_manhattan(&self, coord: Coord) -> Vec<(usize, UnitAbs)> {
+        let mut sorted_snakes = self.snakes.iter()
+            .enumerate()
+            .map(|(i, snake)| {
+                let dist = (coord - snake.head()).manhattan_dist();
+                (i, dist) //make sure to include original index before sorting
+            })
+            .collect::<Vec<_>>();
+        sorted_snakes.sort_unstable_by_key(|(_, dist)| *dist);
+        sorted_snakes
+    }
+
     //todo: baggage from old territory code... can this still be useful?
-    pub fn get_closest_snake(&self, coord: Coord) -> Option<(usize, UnitAbs)> {
+    pub fn get_closest_snake_by_pathfind(&self, coord: Coord) -> Option<(usize, UnitAbs)> {
         let mut best_snake: Option<(usize, UnitAbs)> = None;
 
         //sort snakes by their best case distances -- it's likely we can skip checking most of them

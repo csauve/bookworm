@@ -3,12 +3,14 @@ use std::time::{SystemTime, Duration};
 use std::cmp::{Eq, Ord, Ordering, PartialEq, PartialOrd};
 use std::collections::BinaryHeap;
 use log::*;
+use log::Level::Debug;
 use rayon::prelude::*;
 use crate::api::{ApiDirection, ApiGameState, ALL_DIRS};
 use crate::game::{Board, UnitAbs};
 use crate::util::{cartesian_product, draw_board};
 
-const IGNORE_MOVES_DIST: UnitAbs = 5;
+//3 ^ 5 = 243
+const MAX_PRIORITY_SNAKES: UnitAbs = 5;
 
 type Score = f32;
 
@@ -43,7 +45,10 @@ fn heuristic(board: &Board, snake_index: usize) -> Score {
     let territories = board.get_territories();
     let snake = board.snakes.get(snake_index).unwrap();
     let territory = territories.get(snake_index).unwrap();
-    let h_control = territory.area as Score / board.area() as Score;
+    let h_control = {
+        let total_areas: UnitAbs = territories.iter().map(|terr| terr.area).sum();
+        territory.area as Score / total_areas as Score
+    };
     let h_food = {
         let food_density = if territory.area == 0 {
             0.0
@@ -76,7 +81,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
     let start = SystemTime::now();
 
     let root_turn_board = Board::from_api(game_state);
-    let default_move = root_turn_board.you().get_default_move();
+    let mut decision = root_turn_board.you().get_default_move();
 
     let mut frontier: BinaryHeap<FrontierBoard> = BinaryHeap::new();
     frontier.push(FrontierBoard {
@@ -88,19 +93,24 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
     //live ur best life
     while let Some(leader) = frontier.pop() {
         if SystemTime::now().duration_since(start).unwrap() >= budget {
-            debug!("Decision: dir={:?}, score={}\nRoot:\n{}\nLeader:\n{}", leader.root_dir, leader.h_score, draw_board(&root_turn_board), draw_board(&leader.board));
-            return leader.root_dir.unwrap_or(default_move);
+            if let Some(dir) = leader.root_dir {
+                if log_enabled!(Debug) {
+                    debug!("Budget elapsed: dir={:?}, score={}\nRoot:\n{}\nLeader:\n{}", leader.root_dir, leader.h_score, draw_board(&root_turn_board), draw_board(&leader.board));
+                }
+                decision = dir;
+                break;
+            }
         }
 
-        //fixed array indexed by ApiDirection; use insted of a HashMap to keep data on the stack
-        let worst_outcomes: Mutex<[Option<FrontierBoard>; ALL_DIRS.len()]> = Mutex::new([None, None, None, None]);
-
-        //todo: this can get pretty extreme for an 8 player game -- prune some moves which don't matter much?
+        //figure out what possible moves each snake could make, including the `you` snake at index 0
         let mut snake_moves = leader.board.enumerate_snake_moves();
+
+        //the cartesian product of snake moves can get large, so prune some away
         let you_head = leader.board.you().head();
-        for (other_index, dirs) in snake_moves.iter_mut().enumerate().skip(1) {
-            let other = leader.board.snakes.get(other_index).unwrap();
-            if (other.head() - you_head).manhattan_dist() > IGNORE_MOVES_DIST {
+        let closest_snakes = leader.board.get_closest_snakes_by_manhattan(you_head);
+        for (other_index, _dist) in closest_snakes.iter().skip(MAX_PRIORITY_SNAKES) {
+            let other = leader.board.snakes.get(*other_index).unwrap();
+            if let Some(dirs) = snake_moves.get_mut(*other_index) {
                 let default_move = other.get_default_move();
                 if dirs.contains(&default_move) {
                     dirs.resize(1, default_move);
@@ -110,20 +120,22 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             }
         }
 
+        //fixed array indexed by ApiDirection; use insted of a HashMap to keep data on the stack
+        let worst_outcomes: Mutex<[Option<FrontierBoard>; ALL_DIRS.len()]> = Mutex::new([None, None, None, None]);
+
         //YOU GET A CORE, YOU GET A CORE, YOU GET A CORE! EVERYBODY GETS A CORE!
         cartesian_product(&snake_moves).par_iter().for_each(|moves| {
             let mut next_board = leader.board.clone();
             let dead_snake_indices = next_board.advance(false, moves);
+            let you_move = *moves.get(0).unwrap();
 
             //we are maintaining index 0 as "you"
-            let dir_index = moves.get(0).unwrap().as_index();
+            let dir_index = you_move.as_index();
             let next_h_score = if dead_snake_indices.contains_key(&0) {
-                debug!("Discovered own death");
                 std::f32::MIN
             } else {
                 heuristic(&next_board, 0)
             };
-
             let is_new_worst = worst_outcomes.lock().unwrap()
                 .get(dir_index)
                 .unwrap()
@@ -134,7 +146,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             if is_new_worst {
                 worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
                     board: next_board,
-                    root_dir: Some(leader.root_dir.unwrap_or_else(|| *moves.get(0).unwrap())),
+                    root_dir: Some(leader.root_dir.unwrap_or(you_move)),
                     h_score: next_h_score * 0.25 + leader.h_score * 0.75,
                 });
             }
@@ -143,13 +155,14 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
         //move the worst outcomes into the frontier
         for worst_outcome in worst_outcomes.lock().unwrap().iter_mut() {
             if let Some(frontier_board) = worst_outcome.take() {
-                frontier.push(frontier_board);
+                if frontier_board.h_score != std::f32::MIN {
+                    frontier.push(frontier_board);
+                }
             }
         }
     }
 
-    debug!("game over, man!");
-    default_move
+    decision
 }
 
 #[cfg(test)]
