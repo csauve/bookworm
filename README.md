@@ -1,6 +1,6 @@
-# BookWorm 🐛
+# Bookworm 🐛
 
-BookWorm is a [BattleSnake][1] bot written in [Rust][2] for the March 2020 tournament. Combines the strategies of pruned turn tree exploration, minimax, and heuristic scoring. The snake is given a time budget to explore the turn tree; the fewer the snakes, the deeper the exploration.
+Bookworm is a [BattleSnake][1] bot written in [Rust][2] for the March 2020 tournament. Combines the strategies of pruned turn tree exploration, minimax, and heuristic scoring. The snake is given a time budget to explore the turn tree; the fewer the snakes, the deeper the exploration.
 
 ![](screenshot.png)
 _A server instance playing against itself using the built-in host mode. See `play-host.sh` as an example._

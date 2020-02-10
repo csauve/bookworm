@@ -139,11 +139,10 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
         //fixed array indexed by ApiDirection; use insted of a HashMap to keep data on the stack
         let worst_outcomes: Mutex<[Option<FrontierBoard>; ALL_DIRS.len()]> = Mutex::new([None, None, None, None]);
 
-        //YOU GET A CORE, YOU GET A CORE, YOU GET A CORE! EVERYBODY GETS A CORE!
-
         let move_space = cartesian_product(&snake_moves);
         n_considered += move_space.len();
 
+        //YOU GET A CORE, YOU GET A CORE, YOU GET A CORE! EVERYBODY GETS A CORE!
         move_space.par_iter().for_each(|moves| {
             let mut next_board = leader.board.clone();
             let dead_snake_indices = next_board.advance(false, moves);
