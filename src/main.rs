@@ -5,32 +5,12 @@ mod host;
 mod benchmark;
 mod util;
 mod brain;
-
-use log::*;
 use clap::{App, Arg, SubCommand};
-use chrono::{DateTime, Local};
-
-struct Logger;
-impl log::Log for Logger {
-    fn enabled(&self, _metadata: &Metadata) -> bool {
-        true
-    }
-
-    fn log(&self, record: &Record) {
-        let now: DateTime<Local> = Local::now();
-        println!("{} [{}] {}", now.format("%Y-%m-%d %H:%M:%S%.6f"), record.level(), record.args());
-    }
-
-    fn flush(&self) {}
-}
-
-const LOGGER: Logger = Logger;
+use util::init_logger;
 
 #[tokio::main]
 async fn main() {
-    if set_logger(&LOGGER).is_ok() {
-        log::set_max_level(LevelFilter::Debug)
-    }
+    init_logger();
 
     let matches = App::new("BookWorm")
         .subcommand(SubCommand::with_name("server")
@@ -51,7 +31,7 @@ async fn main() {
                 .short("b")
                 .help("Time budget for responding to /move requests, in milliseconds")
                 .takes_value(true)
-                .default_value("250")
+                .default_value("200")
             )
         )
         .subcommand(SubCommand::with_name("host")

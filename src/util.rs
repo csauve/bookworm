@@ -1,5 +1,7 @@
 use std::iter;
+use log::*;
 use ansi_term::{Colour, Style};
+use chrono::{DateTime, Local};
 use crate::game::{Board, Coord};
 
 const SNAKE_COLOURS: [Colour; 6] = [
@@ -11,6 +13,27 @@ const SNAKE_COLOURS: [Colour; 6] = [
     Colour::Cyan,
 ];
 
+const LOGGER: Logger = Logger;
+
+struct Logger;
+impl log::Log for Logger {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
+        true
+    }
+
+    fn log(&self, record: &Record) {
+        let now: DateTime<Local> = Local::now();
+        println!("{} [{}] {}", now.format("%Y-%m-%d %H:%M:%S%.6f"), record.level(), record.args());
+    }
+
+    fn flush(&self) {}
+}
+
+pub fn init_logger() {
+    if set_logger(&LOGGER).is_ok() {
+        log::set_max_level(LevelFilter::Debug);
+    }
+}
 
 //todo: try returning an iterator instead to avoid allocating the vec if caller doesnt need it
 pub fn cartesian_product<T: Copy>(lists: &[Vec<T>]) -> Vec<Vec<T>> {

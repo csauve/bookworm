@@ -3,7 +3,6 @@ use std::cmp::{Ord, Ordering, Eq, PartialEq, PartialOrd};
 use std::collections::{HashSet, HashMap, BinaryHeap};
 use std::fmt;
 use rand::prelude::*;
-use rand::seq::SliceRandom;
 use std::iter::FromIterator;
 use crate::api::{ApiGameState, ApiDirection, ALL_DIRS};
 use crate::util::cartesian_product;
@@ -14,7 +13,7 @@ use log::*;
 
 pub const SNAKE_MAX_HEALTH: Health = 100;
 pub const SNAKE_START_SIZE: UnitAbs = 3;
-const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
+pub const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
 
