@@ -18,10 +18,10 @@ Just run `cargo build --release` to produce a self-contained binary at `target/r
 Unit tests can be run with `cargo test`, though some strategy tests will fail currently. To quickly build and run the bot, use `cargo run <mode>`. Note that the development build is significantly slower at runtime than the release build, so you may need to increase the `--timeout` for host mode and give the server more time budget with `--budget` to achieve similar lookahead depths.
 
 #### Todos and improvement ideas:
-* Lookahead strategy for avoiding deaths needs some work
 * Implement more unit tests for behaviour; fix the failing ones
 * Look for opportunities to use [infallible DS][3] to avoid empty checks
 * Seed the turn tree exploration with some longer term "plays" instead of just single space movements
+* Move hosting to us-west-1?
 
 ## Resources
 
