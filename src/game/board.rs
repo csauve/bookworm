@@ -351,7 +351,7 @@ impl Board {
 
         if spawn_food {
             let mut rng = rand::thread_rng();
-            if rng.gen_range(0, 100) <= FOOD_SPAWN_CHANCE {
+            if self.food.is_empty() || rng.gen_range(0, 100) <= FOOD_SPAWN_CHANCE {
                 let free_spaces: Vec<Coord> = Vec::from_iter(
                     cartesian_product(&[
                         (0..self.width() as Unit).collect(),

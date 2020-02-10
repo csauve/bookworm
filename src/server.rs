@@ -2,6 +2,7 @@ use std::convert::Infallible;
 use std::net::{SocketAddr, IpAddr};
 use std::time::{SystemTime, Duration};
 use log::*;
+use log::Level::Debug;
 use hyper::{Body, Request, Response, Server, Method, StatusCode, body, service::{make_service_fn, service_fn}};
 use crate::api::{ApiSnakeConfig, ApiMove};
 use crate::brain::get_decision;
@@ -48,6 +49,10 @@ pub async fn start_server(ip: IpAddr, port: u16, budget: u64) {
                             let bytes = body::to_bytes(req.into_body()).await.unwrap();
                             match serde_json::from_slice(&bytes) {
                                 Ok(game_state) => {
+                                    if log_enabled!(Debug) {
+                                        debug!("Parsed request body: {}", serde_json::to_string_pretty(&game_state).unwrap());
+                                    }
+
                                     let start = SystemTime::now();
                                     let decision = get_decision(&game_state, budget);
                                     let json = serde_json::to_string(&ApiMove {decision}).unwrap();
