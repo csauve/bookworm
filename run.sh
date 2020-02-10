@@ -1,2 +1,2 @@
 #!/bin/sh
-nohup ./target/release/server -b 200 -p 8080 &
+nohup ./target/release/bookworm server -b 200 -p 8080 &
