@@ -157,14 +157,14 @@ fn build_api_game_state(board: &Board, snake_index: usize, turn: u32, game_id: &
                 .enumerate()
                 .filter_map(|(i, snake)| {
                     if i != snake_index {
-                        Some(build_api_snake(snake, "id", "name"))
+                        Some(build_api_snake(snake, &format!("id_{}", snake_index), &format!("name_{}", snake_index)))
                     } else {
                         None
                     }
                 })
                 .collect()
         },
-        you: build_api_snake(board.snakes.get(snake_index).unwrap(), "id", "name"),
+        you: build_api_snake(board.snakes.get(snake_index).unwrap(), &format!("id_{}", snake_index), &format!("name_{}", snake_index)),
     }
 }
 

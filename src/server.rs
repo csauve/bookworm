@@ -27,6 +27,7 @@ pub async fn start_server(ip: IpAddr, port: u16, budget: u64) {
                 async move {
                     Ok::<_, Infallible>(match (req.method(), req.uri().path()) {
                         (&Method::GET, "/") => {
+                            debug!("Handled /");
                             Response::new(Body::from("What'sssss up?"))
                         },
                         (&Method::POST, "/ping") => {

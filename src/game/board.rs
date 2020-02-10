@@ -125,7 +125,7 @@ impl Board {
     pub fn from_api(game_state: &ApiGameState) -> Board {
         Board {
             snakes: iter::once(&game_state.you)
-                .chain(game_state.board.snakes.iter())
+                .chain(game_state.board.snakes.iter().filter(|s| s.id != game_state.you.id))
                 .map(|s| Snake::from_api(s).unwrap())
                 .collect(),
             food: game_state.board.food.iter().map(Coord::from).collect(),
@@ -412,6 +412,7 @@ impl fmt::Display for Board {
 //todo: write more tests (head-to-head, head-to-body, pathfinding, territories, free moves, ...)
 #[cfg(test)]
 mod tests {
+    use serde_json;
     use super::*;
     use crate::api::ApiDirection::*;
 
@@ -428,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    fn test_init() {
+    fn test_from_api_basic() {
         let api_game = ApiGameState::parse_basic("
         |  |()|  |
         |  |  |Y0|
@@ -443,6 +444,102 @@ mod tests {
         assert_eq!(board.enemies()[0].tail(), Coord::new(1, 3));
         assert_eq!(board.you().head(), Coord::new(2, 1));
         assert_eq!(board.you().tail(), Coord::new(2, 2));
+    }
+
+    #[test]
+    fn test_from_api_official() {
+        let api_game: ApiGameState = serde_json::from_str("
+        {
+          \"game\": {
+            \"id\": \"abf35360-1258-40f9-8063-88d3bfcb99f8\"
+          },
+          \"turn\": 1,
+          \"board\": {
+            \"height\": 11,
+            \"width\": 11,
+            \"food\": [
+              {
+                \"x\": 3,
+                \"y\": 5
+              },
+              {
+                \"x\": 4,
+                \"y\": 9
+              }
+            ],
+            \"snakes\": [
+              {
+                \"id\": \"gs_rBM9QyRWP7Ybp7yvjtJKMDyW\",
+                \"name\": \"csauve / bookworm\",
+                \"health\": 99,
+                \"body\": [
+                  {
+                    \"x\": 9,
+                    \"y\": 8
+                  },
+                  {
+                    \"x\": 9,
+                    \"y\": 9
+                  },
+                  {
+                    \"x\": 9,
+                    \"y\": 9
+                  }
+                ]
+              },
+              {
+                \"id\": \"gs_P4HmYPKVk8bVVxBhWyvR3HxM\",
+                \"name\": \"csauve / bookworm_debug\",
+                \"health\": 99,
+                \"body\": [
+                  {
+                    \"x\": 9,
+                    \"y\": 0
+                  },
+                  {
+                    \"x\": 9,
+                    \"y\": 1
+                  },
+                  {
+                    \"x\": 9,
+                    \"y\": 1
+                  }
+                ]
+              }
+            ]
+          },
+          \"you\": {
+            \"id\": \"gs_P4HmYPKVk8bVVxBhWyvR3HxM\",
+            \"name\": \"csauve / bookworm_debug\",
+            \"health\": 99,
+            \"body\": [
+              {
+                \"x\": 9,
+                \"y\": 0
+              },
+              {
+                \"x\": 9,
+                \"y\": 1
+              },
+              {
+                \"x\": 9,
+                \"y\": 1
+              }
+            ]
+          }
+        }
+        ").unwrap();
+
+        let board = Board::from_api(&api_game);
+
+        assert_eq!(board.width(), 11);
+        assert_eq!(board.height(), 11);
+        assert_eq!(board.food.len(), 2);
+        assert!(board.food.contains(&Coord::new(3, 5)));
+        assert!(board.food.contains(&Coord::new(4, 9)));
+        assert_eq!(board.snakes.len(), 2);
+        assert_eq!(board.you().head(), Coord::new(9, 0));
+        assert_eq!(board.you().health, 99);
     }
 
     #[test]
