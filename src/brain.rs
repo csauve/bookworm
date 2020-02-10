@@ -6,7 +6,7 @@ use log::*;
 use log::Level::Debug;
 use rayon::prelude::*;
 use crate::api::{ApiDirection, ApiGameState, ALL_DIRS};
-use crate::game::{Board, UnitAbs, FOOD_SPAWN_CHANCE};
+use crate::game::{Board, CauseOfDeath, UnitAbs, FOOD_SPAWN_CHANCE};
 use crate::util::{cartesian_product, draw_board};
 
 //4 ^ 4 = 256
@@ -150,12 +150,17 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             let dir_index = you_move.as_index();
 
             //we are maintaining index 0 as "you"
-            if dead_snake_indices.contains_key(&0) {
+            if let Some(&cause_of_death) = dead_snake_indices.get(&0) {
                 worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
                     board: next_board,
                     root_dir: Some(leader.root_dir.unwrap_or(you_move)),
                     depth: leader.depth + 1,
-                    h_score: std::f32::MIN,
+                    h_score: match cause_of_death {
+                        //prefer a head-to-head death over other types; it's better to take out another snake
+                        CauseOfDeath::HeadToHead => -1.0,
+                        CauseOfDeath::Starved => -2.0,
+                        _ => -3.0,
+                    },
                 });
             } else {
                 let next_h_score = heuristic(&next_board, 0);
@@ -180,7 +185,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
         //move the worst outcomes into the frontier so we can choose the best move, unless death is the worst case
         for worst_outcome in worst_outcomes.lock().unwrap().iter_mut() {
             if let Some(frontier_board) = worst_outcome.take() {
-                if frontier_board.h_score != std::f32::MIN {
+                if frontier_board.h_score >= 0.0 {
                     if log_enabled!(Debug) && frontier_board.depth == 1 {
                         debug!("Depth 1 option: dir={:?} score={}\n{}", frontier_board.root_dir, frontier_board.h_score, draw_board(&frontier_board.board));
                     }

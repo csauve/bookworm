@@ -17,6 +17,15 @@ pub const FOOD_SPAWN_CHANCE: u32 = 15; //of 100
 const ORIGIN: Coord = Coord {x: 0, y: 0};
 const PATHFINDING_HEURISTIC_WEIGHT: UnitAbs = 3;
 
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum CauseOfDeath {
+    HeadToHead,
+    OtherCollision,
+    SelfCollision,
+    OutOfBounds,
+    Starved,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Board {
     //must contain at least 1 snake (the `you` snake, at index 0)
@@ -293,7 +302,7 @@ impl Board {
     }
 
     //Applies known game rules to the board, returning indices of snakes that died
-    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashMap<usize, &'static str> {
+    pub fn advance(&mut self, spawn_food: bool, snake_moves: &[ApiDirection]) -> HashMap<usize, CauseOfDeath> {
         let mut eaten_food: HashSet<usize> = HashSet::new();
 
         //move snakes and find eaten food
@@ -309,27 +318,27 @@ impl Board {
 
         let dead_snakes = self.snakes.iter().enumerate().filter_map(|(snake_index, snake)| {
             if snake.starved() {
-                return Some((snake_index, "starved"));
+                return Some((snake_index, CauseOfDeath::Starved));
             }
             if !snake.head().bounded_by(ORIGIN, self.bound) {
-                return Some((snake_index, "out-of-bounds"));
+                return Some((snake_index, CauseOfDeath::OutOfBounds));
             }
             for (other_snake_index, other_snake) in self.snakes.iter().enumerate() {
                 if other_snake_index != snake_index {
                     if let Some(i) = other_snake.find_first_node(snake.head(), 0) {
                         if i > 0 {
-                            return Some((snake_index, "other-collision"));
+                            return Some((snake_index, CauseOfDeath::OtherCollision));
                         } else if snake.size() <= other_snake.size() {
                             //TWO SNAKES ENTER, ONE SNAKE LEAVES (Ok, actually neither may leave)
-                            return Some((snake_index, "head-to-head"));
+                            return Some((snake_index, CauseOfDeath::HeadToHead));
                         }
                     }
                 } else if other_snake.find_first_node(snake.head(), 1).is_some() {
-                    return Some((snake_index, "self-collision"));
+                    return Some((snake_index, CauseOfDeath::SelfCollision));
                 }
             }
             None
-        }).collect::<HashMap<usize, &'static str>>();
+        }).collect::<HashMap<usize, CauseOfDeath>>();
 
         //clean up
         if !eaten_food.is_empty() {
