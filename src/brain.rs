@@ -151,26 +151,31 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
             let dir_index = you_move.as_index();
 
             //we are maintaining index 0 as "you"
-            let next_h_score = if dead_snake_indices.contains_key(&0) {
-                std::f32::MIN
-            } else {
-                heuristic(&next_board, 0)
-            };
-            let is_new_worst = worst_outcomes.lock().unwrap()
-                .get(dir_index)
-                .unwrap()
-                .as_ref()
-                .map(|worst_outcome| next_h_score < worst_outcome.h_score)
-                .unwrap_or(true);
-
-            if is_new_worst {
+            if dead_snake_indices.contains_key(&0) {
                 worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
                     board: next_board,
                     root_dir: Some(leader.root_dir.unwrap_or(you_move)),
                     depth: leader.depth + 1,
-                    h_score: next_h_score * 0.25 + leader.h_score * 0.75,
+                    h_score: std::f32::MIN,
                 });
-            }
+            } else {
+                let next_h_score = heuristic(&next_board, 0);
+                let is_new_worst = worst_outcomes.lock().unwrap()
+                    .get(dir_index)
+                    .unwrap()
+                    .as_ref()
+                    .map(|worst_outcome| next_h_score < worst_outcome.h_score)
+                    .unwrap_or(true);
+
+                if is_new_worst {
+                    worst_outcomes.lock().unwrap()[dir_index] = Some(FrontierBoard {
+                        board: next_board,
+                        root_dir: Some(leader.root_dir.unwrap_or(you_move)),
+                        depth: leader.depth + 1,
+                        h_score: next_h_score * 0.25 + leader.h_score * 0.75,
+                    });
+                }
+            };
         });
 
         //move the worst outcomes into the frontier so we can choose the best move, unless death is the worst case
@@ -187,8 +192,8 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
     }
 
     if log_enabled!(Debug) {
-        for frontier_board in frontier.iter().take(10) {
-            debug!("Frontier: dir={:?} depth={} score={}\n{}", frontier_board.root_dir, frontier_board.depth, frontier_board.h_score, draw_board(&frontier_board.board));
+        for frontier_board in frontier.iter().take(5) {
+            debug!("Runner up: dir={:?} depth={} score={}\n{}", frontier_board.root_dir, frontier_board.depth, frontier_board.h_score, draw_board(&frontier_board.board));
         }
     }
 
@@ -204,7 +209,7 @@ mod tests {
 
     macro_rules! decide {
         ($s:expr) => {
-            get_decision(&ApiGameState::parse_basic($s), Duration::from_millis(250))
+            get_decision(&ApiGameState::parse_basic($s), Duration::from_millis(200))
         };
     }
 
@@ -423,6 +428,28 @@ mod tests {
         +Y97
         +A97
         +B97
+        "));
+    }
+
+    //turn 99: https://play.battlesnake.com/g/4d5b00be-6036-4dc7-b0a3-78bb20d1451f/
+    #[test]
+    fn test_avoid_starvation() {
+        init_logger();
+        assert_eq!(Right, decide!("
+        |  |  |  |()|  |  |  |  |  |A2|A1|
+        |  |  |()|  |  |  |  |  |  |A3|A0|
+        |  |  |()|  |  |  |  |  |  |  |  |
+        |  |  |  |  |  |  |  |  |  |  |  |
+        |  |  |  |  |  |  |  |()|  |  |  |
+        |  |  |  |  |B2|B1|B0|  |  |  |  |
+        |  |  |  |  |B3|()|  |()|  |  |  |
+        |  |  |  |  |B4|  |  |  |  |  |  |
+        |  |  |  |()|B5|  |  |  |()|  |  |
+        |Y2|  |  |  |B6|B7|B8|  |  |  |()|
+        |Y1|Y0|()|  |  |  |  |  |  |  |  |
+        +Y1
+        +A90
+        +B95
         "));
     }
 }

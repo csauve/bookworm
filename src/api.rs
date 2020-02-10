@@ -143,7 +143,7 @@ impl ApiGameState {
             you: ApiSnake {
                 id: String::from("id_Y"),
                 name: String::from("Y"),
-                health: 100,
+                health: snake_health.get("Y").copied().unwrap_or(100),
                 body: you_coords,
             }
         }

@@ -76,9 +76,7 @@ impl Snake {
     }
 
     pub fn slither(&mut self, dir: ApiDirection) {
-        if !self.starved() {
-            self.health -= 1;
-        }
+        self.health = self.health.saturating_sub(1);
         self.body.slide_start(dir.into());
     }
 
