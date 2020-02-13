@@ -37,7 +37,7 @@ pub async fn start_server(ip: IpAddr, port: u16, budget: u64) {
                         (&Method::POST, "/start") => {
                             let json = serde_json::to_string(&ApiSnakeConfig {
                                 color: String::from("#800080"),
-                                head_type: String::from("sand-worm"),
+                                head_type: String::from("bendr"),
                                 tail_type: String::from("round-bum"),
                             }).unwrap();
                             debug!("Handled /start");

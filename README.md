@@ -47,6 +47,9 @@ Questionable life choices:
 * [Turn 13: Allow for chance of survival](https://play.battlesnake.com/g/53b159ea-a914-493d-8c73-54680186fafa/)
 * [Turn 21: Prefer going up because less likely blue_bottle will go there](https://play.battlesnake.com/g/eff9c73e-cbb2-4bf9-98a1-89f0e8244bcb/)
 * [Turn 74: Ran into another snake, but should prefer possibility of head-to-head death](https://play.battlesnake.com/g/977be8a8-ca65-48b8-bc8c-37310ab61701/)
+* [Turn 240: Could have trapped enemy but didn't](https://play.battlesnake.com/g/639eb325-932a-463c-9f4c-5aaa96495f7d/)
+* [Turn 122: Ditto above](https://play.battlesnake.com/g/23b1ec46-6c97-407a-b6a7-9aee9b75464d/)
+* [Turn 15: Didn't understand stacked tail rule?](https://play.battlesnake.com/g/93a1babe-2aa6-411f-b67d-e20e4d6d644c/)
 
 ## References and resources
 
