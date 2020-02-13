@@ -106,17 +106,18 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
 
     //live ur best life
     while let Some(leader) = frontier.pop() {
+        if let Some(dir) = leader.root_dir {
+            decision = dir;
+        }
+
         if SystemTime::now().duration_since(start).unwrap() >= budget {
-            if let Some(dir) = leader.root_dir {
-                info!(
-                    "Budget elapsed: n_considered={}, depth={}, score={}",
-                    n_considered,
-                    leader.depth,
-                    leader.h_score
-                );
-                decision = dir;
-                break;
-            }
+            info!(
+                "Budget elapsed: n_considered={}, depth={}, score={}",
+                n_considered,
+                leader.depth,
+                leader.h_score
+            );
+            break;
         }
 
         //figure out what possible moves each snake could make, including the `you` snake at index 0
@@ -176,7 +177,7 @@ pub fn get_decision(game_state: &ApiGameState, budget: Duration) -> ApiDirection
                         board: next_board,
                         root_dir: Some(leader.root_dir.unwrap_or(you_move)),
                         depth: leader.depth + 1,
-                        h_score: next_h_score * 0.25 + leader.h_score * 0.75,
+                        h_score: min_f32(next_h_score, leader.h_score),
                     });
                 }
             };
@@ -248,6 +249,7 @@ mod tests {
 
     #[test]
     fn test_facing_other() {
+
         //should avoid being trapped between self and other snake
         assert_eq!(Left, decide!("
         |A3|  |  |  |  |
@@ -257,8 +259,7 @@ mod tests {
         |  |  |  |  |  |
         "));
 
-        //todo: this is failing
-        //will be trapped, but there is nowhere else to go
+        //should prefer the empty space, even though trapped, because chance enemy kills self or we kill it in head-to-head
         assert_eq!(Right, decide!("
         |A2|  |Y6|  |
         |A1|A0|Y5|  |
@@ -299,8 +300,7 @@ mod tests {
         "));
     }
 
-    //todo: work on this in heuristics
-    // #[test]
+    #[test]
     fn test_lookahead_best_dead_end() {
         //both options are a dead end, but going Up has more turns left (hope a snake dies and frees us)
         assert_eq!(Up, decide!("
@@ -438,7 +438,6 @@ mod tests {
     //turn 99: https://play.battlesnake.com/g/4d5b00be-6036-4dc7-b0a3-78bb20d1451f/
     #[test]
     fn test_avoid_starvation() {
-        init_logger();
         assert_eq!(Right, decide!("
         |  |  |  |()|  |  |  |  |  |A2|A1|
         |  |  |()|  |  |  |  |  |  |A3|A0|

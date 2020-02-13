@@ -19,7 +19,7 @@ Unit tests can be run with `cargo test`, though some strategy tests will fail cu
 
 ### Todos and improvement ideas:
 * Heuristics and strategy
-  * Implement more unit tests for behaviour; fix the failing ones
+  * Implement more unit tests for behaviour
   * Seed the turn tree exploration with some longer term "plays" instead of just single space movements
   * Allow for chances of death instead of assumed worst case
   * If death unavoidable, prefer head-to-head
@@ -36,6 +36,8 @@ Unit tests can be run with `cargo test`, though some strategy tests will fail cu
   * Dynamic heuristic weight
 
 ### The "wat" list
+
+Questionable life choices:
 
 * [Turn 114: Feeding rule change?](https://play.battlesnake.com/g/72eee8c6-7b26-4b81-afb0-1afa17f5c5bf/)
 * [Turn 230: Gave enemy opportunity to easily kill us head-to-head](https://play.battlesnake.com/g/04c853c2-0e3e-4013-8bb5-fd66a82ce2d6/)
