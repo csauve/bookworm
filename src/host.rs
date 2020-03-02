@@ -20,6 +20,7 @@ struct LiveSnake {
 
 async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: ApiGameState) -> Result<ApiSnakeConfig, String> {
     let req = Request::post(format!("{}/start", addr))
+        .header("Content-Type", "application/json")
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
     let k = timeout(Duration::from_millis(START_TIMEOUT_MS), client.request(req));
@@ -42,6 +43,7 @@ async fn notify_start(client: &Client<HttpConnector>, addr: &str, game_state: Ap
 
 async fn get_move(client: &Client<HttpConnector>, addr: String, game_state: ApiGameState, timeout_ms: u64) -> Result<ApiMove, String> {
     let req = Request::post(format!("{}/move", addr))
+        .header("Content-Type", "application/json")
         .body(Body::from(serde_json::to_string(&game_state).unwrap()))
         .unwrap();
     match timeout(Duration::from_millis(timeout_ms), client.request(req)).await {
@@ -155,12 +157,8 @@ fn build_api_game_state(board: &Board, snake_index: usize, turn: u32, game_id: &
             food: board.food.iter().map(ApiCoords::from).collect(),
             snakes: board.snakes.iter()
                 .enumerate()
-                .filter_map(|(i, snake)| {
-                    if i != snake_index {
-                        Some(build_api_snake(snake, &format!("id_{}", snake_index), &format!("name_{}", snake_index)))
-                    } else {
-                        None
-                    }
+                .map(|(i, snake)| {
+                    build_api_snake(snake, &format!("id_{}", i), &format!("name_{}", i))
                 })
                 .collect()
         },
